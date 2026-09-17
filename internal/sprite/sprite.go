@@ -441,5 +441,5 @@ func (s Sprite) Save() error {
 		formatClipsSection(&b, s.Clips)
 	}
 
-	return os.WriteFile(s.Path, []byte(b.String()), 0o644)
+	return writeFileAtomic(s.Path, []byte(b.String()), 0o644)
 }

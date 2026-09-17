@@ -203,5 +203,5 @@ func (f Frame) Save(s Sprite) error {
 		b.WriteString("\n")
 	}
 
-	return os.WriteFile(filepath.Join(dir, f.ID+".px"), []byte(b.String()), 0o644)
+	return writeFileAtomic(filepath.Join(dir, f.ID+".px"), []byte(b.String()), 0o644)
 }

@@ -2,6 +2,7 @@ package sprite
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 )
 
@@ -118,4 +119,60 @@ func TestPaletteOverflow(t *testing.T) {
 	if _, err := s.ColorToChar("#ffffff"); err == nil {
 		t.Fatalf("expected overflow error allocating a 63rd color, got nil")
 	}
+}
+
+// TestConcurrentSavesNeverProduceEmptyFile guards against a real bug: two
+// concurrent HTTP handlers (e.g. a debounced frame PUT and a layer-panel
+// PATCH) each call Sprite.Save() around the same time. A plain
+// os.WriteFile opens with O_TRUNC and writes in a separate step, so a
+// concurrent Find() can observe the file mid-write, truncated to zero
+// bytes, and fail with "empty file". Save must write atomically (temp
+// file + rename) so a reader only ever sees a complete file.
+func TestConcurrentSavesNeverProduceEmptyFile(t *testing.T) {
+	t.Chdir(t.TempDir())
+	s, err := NewSprite("Race", 8, 8, "")
+	if err != nil {
+		t.Fatalf("NewSprite: %v", err)
+	}
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			got, err := Find(s.ID)
+			if err != nil {
+				t.Errorf("Find during concurrent Save: %v", err)
+				return
+			}
+			if got == nil {
+				t.Errorf("Find returned nil sprite mid-write")
+				return
+			}
+		}
+	}()
+
+	var writers sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		writers.Add(1)
+		go func() {
+			defer writers.Done()
+			for j := 0; j < 200; j++ {
+				if err := s.Save(); err != nil {
+					t.Errorf("Save: %v", err)
+					return
+				}
+			}
+		}()
+	}
+	writers.Wait()
+	close(stop)
+	wg.Wait()
 }

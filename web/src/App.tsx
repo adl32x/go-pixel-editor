@@ -72,6 +72,7 @@ export default function App() {
 
   async function handleCreateSprite(input: { name: string; width: number; height: number }) {
     const created = await api.createSprite(input);
+    await api.addFrame(created.id);
     await refreshSprites();
     setSpriteId(created.id);
   }
@@ -128,13 +129,19 @@ export default function App() {
                 onSelectColor={setBrushColor}
               />
 
-              <DottingCanvas
-                ref={canvasRef}
-                initLayers={initLayers}
-                brushTool={BrushTool.DOT}
-                brushColor={brushColor}
-                onChange={handleCanvasChange}
-              />
+              {initLayers.length > 0 ? (
+                <DottingCanvas
+                  ref={canvasRef}
+                  initLayers={initLayers}
+                  brushTool={BrushTool.DOT}
+                  brushColor={brushColor}
+                  onChange={handleCanvasChange}
+                />
+              ) : (
+                <p className="app-no-frames">
+                  This sprite has no frames yet — add one from the timeline below.
+                </p>
+              )}
 
               <LayerPanel layers={sprite.layers} onChange={handleLayersChange} />
             </div>

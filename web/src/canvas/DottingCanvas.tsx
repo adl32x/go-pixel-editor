@@ -47,29 +47,55 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
       const handleChange = () => {
         if (timeout) clearTimeout(timeout);
         timeout = setTimeout(() => {
-          onChange(ref.getLayersAsArray());
+          // getLayersAsArray() can return undefined if dotting's internal
+          // editor has already torn down by the time this debounced
+          // callback fires (e.g. a frame/sprite switch mid-debounce) —
+          // nothing to persist in that case.
+          const layers = ref.getLayersAsArray();
+          if (layers) onChange(layers);
         }, 400);
       };
 
       ref.addDataChangeListener(handleChange);
       return () => {
         if (timeout) clearTimeout(timeout);
-        ref.removeDataChangeListener(handleChange);
+        try {
+          ref.removeDataChangeListener(handleChange);
+        } catch {
+          // dotting can tear down its internal editor before this cleanup
+          // runs (observed during React StrictMode's dev-only double
+          // mount/unmount cycle) — nothing left to detach from in that case.
+        }
       };
     }, [onChange]);
 
     return (
-      <Dotting
-        ref={dottingRef}
-        width={width}
-        height={height}
-        initLayers={initLayers}
-        brushTool={brushTool}
-        brushColor={brushColor}
-        isGridVisible
-        isPanZoomable
-        gridSquareLength={20}
-      />
+      // dotting has two separate opaque fills that both need disabling to
+      // get a truly transparent canvas: `backgroundColor` (the area
+      // outside the declared grid, default #999) and `defaultPixelColor`
+      // (every cell *inside* the grid with no color, default #fff,
+      // painted underneath every layer on every render regardless of
+      // backgroundColor). Setting both to "transparent" makes each a
+      // no-op fill (canvas resolves "transparent" to alpha 0) so the
+      // checkerboard behind the canvas (see .dotting-canvas-checkerboard)
+      // shows through instead — matching sprites' actual default (a new
+      // frame's cells all start unset, i.e. transparent, not any color).
+      <div className="dotting-canvas-checkerboard">
+        <Dotting
+          ref={dottingRef}
+          width={width}
+          height={height}
+          initLayers={initLayers}
+          brushTool={brushTool}
+          brushColor={brushColor}
+          backgroundColor="transparent"
+          defaultPixelColor="transparent"
+          isGridVisible
+          isPanZoomable
+          isGridFixed
+          gridSquareLength={20}
+        />
+      </div>
     );
   },
 );

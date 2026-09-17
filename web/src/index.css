@@ -1,12 +1,32 @@
+:root {
+  --mac-bg: #ececef;
+  --mac-sidebar-bg: #f6f6f7;
+  --mac-panel-bg: #ffffff;
+  --mac-border: rgba(0, 0, 0, 0.1);
+  --mac-border-strong: rgba(0, 0, 0, 0.16);
+  --mac-text: #1d1d1f;
+  --mac-text-secondary: #6e6e73;
+  --mac-accent: #007aff;
+  --mac-accent-hover: #006ae6;
+  --mac-radius-panel: 10px;
+  --mac-radius-control: 6px;
+  --mac-shadow-panel: 0 1px 1px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --checker-light: #fafafa;
+  --checker-dark: #d6d6db;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #1e1e22;
-  color: #eee;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    Arial, sans-serif;
+  font-size: 13px;
+  background: var(--mac-bg);
+  color: var(--mac-text);
+  -webkit-font-smoothing: antialiased;
 }
 
 .app {
@@ -17,30 +37,31 @@ body {
 .app-sidebar {
   width: 240px;
   flex-shrink: 0;
-  padding: 12px;
-  border-right: 1px solid #333;
+  padding: 16px 12px;
+  background: var(--mac-sidebar-bg);
+  border-right: 1px solid var(--mac-border);
 }
 
 .app-main {
   flex: 1;
-  padding: 12px 20px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.app-workspace {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
+.app-no-frames {
+  color: var(--mac-text-secondary);
+  font-style: italic;
 }
 
 h3 {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #999;
+  color: var(--mac-text-secondary);
 }
 
 ul, ol {
@@ -49,40 +70,144 @@ ul, ol {
   padding: 0;
 }
 
+/* -- macOS-style panel "cards" -------------------------------------- */
+
+.app-workspace,
+.sprite-meta,
+.timeline,
+.playback-controls,
+.clip-editor {
+  background: var(--mac-panel-bg);
+  border: 1px solid var(--mac-border);
+  border-radius: var(--mac-radius-panel);
+  box-shadow: var(--mac-shadow-panel);
+  padding: 14px 16px;
+}
+
+.app-workspace {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+/* -- controls -------------------------------------------------------- */
+
 button {
   cursor: pointer;
+  font: inherit;
+  color: var(--mac-text);
+  background: #fff;
+  border: 1px solid var(--mac-border-strong);
+  border-radius: var(--mac-radius-control);
+  padding: 5px 12px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
 }
+
+button:hover {
+  background: #f5f5f5;
+}
+
+button:active {
+  background: #ececec;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+input, select {
+  font: inherit;
+  color: var(--mac-text);
+  background: #fff;
+  border: 1px solid var(--mac-border-strong);
+  border-radius: var(--mac-radius-control);
+  padding: 4px 8px;
+}
+
+input:focus, select:focus, button:focus-visible {
+  outline: none;
+  border-color: var(--mac-accent);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.22);
+}
+
+input[type="checkbox"], input[type="range"] {
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  accent-color: var(--mac-accent);
+}
+
+a {
+  color: var(--mac-accent);
+}
+
+/* -- selectable list rows (sprites, clips, frames) -------------------- */
 
 .sprite-list-item, .clip-item, .timeline-frame {
   display: block;
   width: 100%;
   text-align: left;
-  background: #2a2a30;
-  color: #eee;
-  border: 1px solid #3a3a42;
-  border-radius: 4px;
+  background: transparent;
+  color: var(--mac-text);
+  border: 1px solid transparent;
+  border-radius: var(--mac-radius-control);
   padding: 6px 8px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  box-shadow: none;
+}
+
+.sprite-list-item:hover, .clip-item:hover, .timeline-frame:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .sprite-list-item.selected, .clip-item.selected, .timeline-frame.selected {
-  border-color: #5aa9ff;
+  background: var(--mac-accent);
+  border-color: var(--mac-accent);
+  color: #fff;
+}
+
+.sprite-list-item.selected:hover, .clip-item.selected:hover, .timeline-frame.selected:hover {
+  background: var(--mac-accent-hover);
 }
 
 .sprite-create, .clip-create {
   display: flex;
-  gap: 4px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 10px;
 }
 
-.sprite-create input, .clip-create input {
-  width: 60px;
+.sprite-create input {
+  width: 56px;
 }
 
 .sprite-meta {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
+}
+
+.sprite-meta-dims {
+  color: var(--mac-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- checkerboard transparency indicator ------------------------------ */
+
+.dotting-canvas-checkerboard {
+  display: inline-block;
+  border-radius: var(--mac-radius-control);
+  overflow: hidden;
+  border: 1px solid var(--mac-border);
+  background-color: var(--checker-light);
+  background-image:
+    linear-gradient(45deg, var(--checker-dark) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--checker-dark) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--checker-dark) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--checker-dark) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
 }
 
 .palette-bar {
@@ -93,18 +218,20 @@ button {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 4px;
+  margin-bottom: 8px;
 }
 
 .palette-swatch {
   width: 20px;
   height: 20px;
-  border: 1px solid #444;
-  border-radius: 2px;
+  border: 1px solid var(--mac-border-strong);
+  border-radius: 4px;
   padding: 0;
 }
 
 .palette-swatch.selected {
-  outline: 2px solid #5aa9ff;
+  outline: 2px solid var(--mac-accent);
+  outline-offset: 1px;
 }
 
 .layer-panel {
@@ -126,7 +253,7 @@ button {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 8px;
+  padding-bottom: 4px;
 }
 
 .timeline-frame {
@@ -139,32 +266,48 @@ button {
   display: block;
   font-size: 10px;
   text-align: center;
-  color: #999;
+  color: var(--mac-text-secondary);
+}
+
+.timeline-frame.selected .timeline-frame-label {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .timeline-frame-delete {
   position: absolute;
   top: -6px;
   right: -6px;
-  background: #822;
+  background: #ff3b30;
+  color: #fff;
   border-radius: 50%;
   width: 16px;
   height: 16px;
   text-align: center;
   line-height: 16px;
   font-size: 11px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .timeline-add {
   width: 64px;
   flex-shrink: 0;
+  align-self: stretch;
 }
 
 .frame-thumbnail {
   width: 48px;
   height: 48px;
-  background: #111;
+  border-radius: 4px;
+  border: 1px solid var(--mac-border);
   image-rendering: pixelated;
+  background-color: var(--checker-light);
+  background-image:
+    linear-gradient(45deg, var(--checker-dark) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--checker-dark) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--checker-dark) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--checker-dark) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
 }
 
 .playback-controls {
@@ -173,12 +316,34 @@ button {
   gap: 12px;
 }
 
+.playback-controls-empty {
+  color: var(--mac-text-secondary);
+  font-style: italic;
+}
+
 .playback-controls input[type="range"] {
   flex: 1;
 }
 
+.playback-controls label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--mac-text-secondary);
+}
+
 .clip-editor {
   max-width: 480px;
+}
+
+.clip-list {
+  margin-bottom: 4px;
+}
+
+.clip-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--mac-border);
 }
 
 .clip-detail-header {
@@ -186,6 +351,13 @@ button {
   gap: 12px;
   align-items: center;
   margin-bottom: 8px;
+}
+
+.clip-detail-header label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--mac-text-secondary);
 }
 
 .clip-entries li {

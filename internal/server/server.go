@@ -7,6 +7,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os/exec"
@@ -135,7 +136,7 @@ type createSpriteRequest struct {
 
 func handleCreateSprite(w http.ResponseWriter, r *http.Request) {
 	var req createSpriteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -157,7 +158,7 @@ func handleGetSprite(w http.ResponseWriter, r *http.Request) {
 
 func handlePatchSprite(w http.ResponseWriter, r *http.Request) {
 	var patch sprite.SpritePatch
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+	if err := decodeJSON(r, &patch); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -218,7 +219,7 @@ func handlePutFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var layers []sprite.LayerProps
-	if err := json.NewDecoder(r.Body).Decode(&layers); err != nil {
+	if err := decodeJSON(r, &layers); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -275,7 +276,7 @@ func handleCreateClip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req createClipRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -298,7 +299,7 @@ func handlePatchClip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var patch sprite.ClipPatch
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+	if err := decodeJSON(r, &patch); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -425,6 +426,19 @@ func handleExportFormats(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// decodeJSON decodes r's body into v, turning the raw io.EOF a JSON decoder
+// returns for a request with no body at all into a message that actually
+// says so, instead of leaking "EOF" verbatim into an API error response.
+func decodeJSON(r *http.Request, v any) error {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		if err == io.EOF {
+			return fmt.Errorf("request body is required")
+		}
+		return err
+	}
+	return nil
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {
