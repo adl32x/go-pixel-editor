@@ -48,20 +48,33 @@ export default function App() {
     canvasRef.current?.loadLayers(layers);
   }, [spriteId]);
 
+  // Loads a newly-selected sprite. This intentionally does NOT go through
+  // selectFrame()'s imperative canvasRef.loadLayers() call: a different
+  // sprite can have a different grid size and layer set than whatever
+  // <DottingCanvas> is currently mounted for, and dotting's internal
+  // editor does not support being repurposed for a differently-shaped
+  // grid via setLayers() (it corrupts internal state — e.g.
+  // this.interactionLayer becomes undefined on the next render). Instead
+  // sprite/frame/initLayers are all set together here in one batch, and
+  // <DottingCanvas key={sprite.id}> below remounts a fresh editor whose
+  // *initial* props already match the new sprite, rather than trying to
+  // swap an existing editor's data out from under it.
   useEffect(() => {
     if (!spriteId) return;
     (async () => {
-      const s = await refreshSprite(spriteId);
-      setClipName(s.clips[0]?.name ?? null);
+      const s = await api.getSprite(spriteId);
+      let firstFrameId: string | null = null;
+      let layers = EMPTY_LAYERS;
       if (s.frameIds.length > 0) {
-        await selectFrame(s.frameIds[0]);
-      } else {
-        setFrameId(null);
-        setInitLayers(EMPTY_LAYERS);
+        firstFrameId = s.frameIds[0];
+        layers = await api.getFrame(spriteId, firstFrameId);
       }
+      setSprite(s);
+      setClipName(s.clips[0]?.name ?? null);
+      setFrameId(firstFrameId);
+      setInitLayers(layers);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spriteId, refreshSprite]);
+  }, [spriteId]);
 
   useEffect(() => {
     const clip = sprite?.clips.find((c) => c.name === clipName);
@@ -77,10 +90,20 @@ export default function App() {
     setSpriteId(created.id);
   }
 
-  async function handleCanvasChange(layers: LayerProps[]) {
-    if (!spriteId || !frameId) return;
-    await api.putFrame(spriteId, frameId, layers);
-  }
+  // Memoized: DottingCanvas's internal data-change listener + debounce
+  // timer live inside a useEffect keyed on this callback's identity. An
+  // unmemoized function here would get a new reference on every App
+  // render (sprite list refresh, brushColor change, anything) — which
+  // are frequent enough that DottingCanvas's effect cleanup would tear
+  // down and rebuild the listener mid-debounce, silently cancelling
+  // pending saves before the 400ms timeout ever fires.
+  const handleCanvasChange = useCallback(
+    async (layers: LayerProps[]) => {
+      if (!spriteId || !frameId) return;
+      await api.putFrame(spriteId, frameId, layers);
+    },
+    [spriteId, frameId],
+  );
 
   async function handleFramesChanged() {
     if (!spriteId) return;
@@ -131,6 +154,7 @@ export default function App() {
 
               {initLayers.length > 0 ? (
                 <DottingCanvas
+                  key={sprite.id}
                   ref={canvasRef}
                   initLayers={initLayers}
                   brushTool={BrushTool.DOT}

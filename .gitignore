@@ -4,3 +4,4 @@ web/node_modules/
 web/tsconfig.tsbuildinfo
 internal/server/dist/*
 !internal/server/dist/.gitkeep
+.DS_Store
