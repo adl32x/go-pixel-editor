@@ -195,6 +195,7 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
           isGridVisible
           isPanZoomable
           isGridFixed
+          initAutoScale
           gridSquareLength={20}
         />
       </div>
