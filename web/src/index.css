@@ -1,0 +1,203 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #1e1e22;
+  color: #eee;
+}
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  padding: 12px;
+  border-right: 1px solid #333;
+}
+
+.app-main {
+  flex: 1;
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.app-workspace {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #999;
+}
+
+ul, ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+button {
+  cursor: pointer;
+}
+
+.sprite-list-item, .clip-item, .timeline-frame {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #2a2a30;
+  color: #eee;
+  border: 1px solid #3a3a42;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+}
+
+.sprite-list-item.selected, .clip-item.selected, .timeline-frame.selected {
+  border-color: #5aa9ff;
+}
+
+.sprite-create, .clip-create {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.sprite-create input, .clip-create input {
+  width: 60px;
+}
+
+.sprite-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.palette-bar {
+  width: 140px;
+}
+
+.palette-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.palette-swatch {
+  width: 20px;
+  height: 20px;
+  border: 1px solid #444;
+  border-radius: 2px;
+  padding: 0;
+}
+
+.palette-swatch.selected {
+  outline: 2px solid #5aa9ff;
+}
+
+.layer-panel {
+  width: 180px;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.layer-name {
+  flex: 1;
+}
+
+.timeline-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.timeline-frame {
+  position: relative;
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.timeline-frame-label {
+  display: block;
+  font-size: 10px;
+  text-align: center;
+  color: #999;
+}
+
+.timeline-frame-delete {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #822;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  text-align: center;
+  line-height: 16px;
+  font-size: 11px;
+}
+
+.timeline-add {
+  width: 64px;
+  flex-shrink: 0;
+}
+
+.frame-thumbnail {
+  width: 48px;
+  height: 48px;
+  background: #111;
+  image-rendering: pixelated;
+}
+
+.playback-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.playback-controls input[type="range"] {
+  flex: 1;
+}
+
+.clip-editor {
+  max-width: 480px;
+}
+
+.clip-detail-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.clip-entries li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.clip-export {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
