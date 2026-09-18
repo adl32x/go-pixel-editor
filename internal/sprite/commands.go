@@ -140,6 +140,123 @@ func UpdateSprite(id string, patch SpritePatch) (Sprite, error) {
 	return *s, nil
 }
 
+// nextLayerID scans s.Layers for the highest numeric suffix after "L" and
+// returns max+1, e.g. "L3" if the highest existing is "L2". Mirrors
+// nextFrameID's max+1-over-existing scheme: never renumbered, never reused
+// from a currently-declared layer (though, like frame IDs, an ID freed by
+// deleting the current max could in principle be reused by a later add —
+// see frame_test.go's TestAddFrameIDNeverFillsAGap for why that's an
+// accepted, documented limitation of this scheme rather than a bug).
+func nextLayerID(s Sprite) string {
+	max := 0
+	for _, ld := range s.Layers {
+		n, err := strconv.Atoi(strings.TrimPrefix(ld.ID, "L"))
+		if err != nil {
+			continue
+		}
+		if n > max {
+			max = n
+		}
+	}
+	return fmt.Sprintf("L%d", max+1)
+}
+
+// AddLayer adds a new layer to s, as the new topmost layer (prepended —
+// stack order is first=topmost, see LayerDef), and retrofits a blank
+// (all-'.') block for it onto every one of s's existing frames.
+//
+// Order matters here to keep the failure window as small as possible: every
+// frame is rewritten *before* s.Save() persists the new layer to sprite.md.
+// If this is interrupted partway through, only the frames actually
+// retrofitted so far end up with an "unknown layer block" (since sprite.md
+// on disk still doesn't declare the new layer) until the operation
+// completes or is retried — the alternative order (save sprite.md first)
+// would instead make *every* frame of the sprite immediately unloadable
+// ("missing layer") the moment any single frame's rewrite failed, which is
+// worse. Same ordering RemapPalette (#0026) already uses for the same
+// reason: rewrite content first, commit the metadata describing it last.
+func AddLayer(s *Sprite, name string) (LayerDef, error) {
+	frames, err := LoadFrames(*s)
+	if err != nil {
+		return LayerDef{}, err
+	}
+	if name == "" {
+		name = "Layer"
+	}
+
+	newLayer := LayerDef{ID: nextLayerID(*s), Name: name, Visible: true, Opacity: 1}
+	s.Layers = append([]LayerDef{newLayer}, s.Layers...)
+
+	blank := make([][]rune, s.Height)
+	for r := range blank {
+		row := make([]rune, s.Width)
+		for c := range row {
+			row[c] = '.'
+		}
+		blank[r] = row
+	}
+
+	for _, f := range frames {
+		gridCopy := make([][]rune, len(blank))
+		for r, row := range blank {
+			gridCopy[r] = append([]rune(nil), row...)
+		}
+		f.Layers[newLayer.ID] = gridCopy
+		if err := f.Save(*s); err != nil {
+			return LayerDef{}, fmt.Errorf("frame %s: %w", f.ID, err)
+		}
+	}
+
+	if err := s.Save(); err != nil {
+		return LayerDef{}, err
+	}
+	return newLayer, nil
+}
+
+// DeleteLayer removes layerID from s and strips its block from every
+// existing frame. Refuses to delete a sprite's last remaining layer — a
+// sprite with zero layers has nothing for a frame to declare.
+//
+// Same frames-first, sprite.md-last ordering as AddLayer, for the same
+// reason (minimize the blast radius of an interrupted operation).
+func DeleteLayer(s *Sprite, layerID string) error {
+	if len(s.Layers) <= 1 {
+		return fmt.Errorf("cannot delete a sprite's last remaining layer")
+	}
+	found := false
+	for _, ld := range s.Layers {
+		if ld.ID == layerID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("no layer %q", layerID)
+	}
+
+	frames, err := LoadFrames(*s)
+	if err != nil {
+		return err
+	}
+
+	kept := make([]LayerDef, 0, len(s.Layers)-1)
+	for _, ld := range s.Layers {
+		if ld.ID != layerID {
+			kept = append(kept, ld)
+		}
+	}
+	s.Layers = kept
+
+	for _, f := range frames {
+		delete(f.Layers, layerID)
+		if err := f.Save(*s); err != nil {
+			return fmt.Errorf("frame %s: %w", f.ID, err)
+		}
+	}
+
+	return s.Save()
+}
+
 // AddFrame creates a new blank frame (every layer filled with '.') for s,
 // with the next never-reused frame id, and saves it.
 func AddFrame(s Sprite) (Frame, error) {

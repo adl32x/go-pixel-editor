@@ -284,18 +284,53 @@ a {
 }
 
 .layer-panel {
-  width: 180px;
+  width: 220px;
 }
 
 .layer-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding: 4px;
+  border-radius: var(--mac-radius-control);
+  border: 1px solid transparent;
+}
+
+.layer-row.selected {
+  border-color: var(--mac-accent);
+  background: rgba(0, 122, 255, 0.08);
 }
 
 .layer-name {
   flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+}
+
+.layer-row input[type="range"] {
+  width: 48px;
+}
+
+.layer-row-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.layer-row-actions button {
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
+.layer-create {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.layer-create input {
+  flex: 1;
+  min-width: 0;
 }
 
 .timeline-strip {

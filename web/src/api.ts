@@ -93,6 +93,25 @@ export function deleteFrame(
   });
 }
 
+// -- layers ----------------------------------------------------------------
+// Adding/removing a layer retrofits or strips a block on every existing
+// frame (see sprite.AddLayer/DeleteLayer) — unlike rename/reorder/opacity/
+// visibility, which don't touch frame files and so just go through
+// patchSprite({ layers }) like they already did.
+
+export function addLayer(spriteId: string, name: string): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/layers`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteLayer(spriteId: string, layerId: string): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/layers/${encodeURIComponent(layerId)}`, {
+    method: "DELETE",
+  });
+}
+
 // -- clips ---------------------------------------------------------------
 
 export function listClips(spriteId: string): Promise<Clip[]> {

@@ -19,6 +19,11 @@ interface DottingCanvasProps {
   initLayers: LayerProps[];
   brushTool: BrushTool;
   brushColor: string;
+  // Which layer new strokes land on. dotting has its own internal "current
+  // layer" state but no UI of its own to change it (we have our own
+  // LayerPanel for that) — this prop drives dotting's setCurrentLayer ref
+  // method imperatively, the same way loadLayers drives setLayers.
+  activeLayerId: string;
   onChange: (layers: LayerProps[]) => void;
 }
 
@@ -53,7 +58,7 @@ function denseGridFromDottingData(
 // `initLayers` updating reactively (it is only read on mount).
 const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
   function DottingCanvas(
-    { width = 512, height = 512, initLayers, brushTool, brushColor, onChange },
+    { width = 512, height = 512, initLayers, brushTool, brushColor, activeLayerId, onChange },
     outerRef,
   ) {
     const dottingRef = useRef<DottingRef>(null);
@@ -85,10 +90,19 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
     // payload — so we reconstruct full-sprite state from that instead of
     // ever calling back into the ref for it.
     const layersRef = useRef(new Map<string, PixelModifyItem[][]>());
+    // The current *set* of layer ids, separate from layersRef's per-layer
+    // pixel data. currentLayersArray() below must iterate this — not the
+    // initLayers prop directly — because initLayers is a value captured
+    // once by the mount-only effect further down; if a layer is added or
+    // removed after mount via loadLayers() (#0028), iterating the original
+    // initLayers would keep producing the *old* layer set forever, silently
+    // dropping the new/removed layer's data from every subsequent save.
+    const layerIdsRef = useRef(initLayers.map((l) => l.id));
     const gridWidth = initLayers[0]?.data[0]?.length ?? width;
     const gridHeight = initLayers[0]?.data.length ?? height;
 
     useEffect(() => {
+      layerIdsRef.current = initLayers.map((l) => l.id);
       layersRef.current = new Map(
         initLayers.map((l) => [l.id, l.data]),
       );
@@ -101,9 +115,9 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
     }, []);
 
     function currentLayersArray(): LayerProps[] {
-      return initLayers.map((l) => ({
-        id: l.id,
-        data: layersRef.current.get(l.id) ?? l.data,
+      return layerIdsRef.current.map((id) => ({
+        id,
+        data: layersRef.current.get(id) ?? [],
       }));
     }
 
@@ -111,6 +125,7 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
       outerRef,
       () => ({
         loadLayers(layers: LayerProps[]) {
+          layerIdsRef.current = layers.map((l) => l.id);
           layersRef.current = new Map(layers.map((l) => [l.id, l.data]));
           dottingRef.current?.setLayers(layers);
         },
@@ -120,6 +135,24 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
       }),
       [],
     );
+
+    // Push the active-layer selection into dotting imperatively — it has
+    // no UI of its own to change this (LayerPanel is ours), and setLayers/
+    // loadLayers above don't touch it, so this needs its own effect.
+    //
+    // Guarded: dotting's setCurrentLayer throws synchronously ("Layer not
+    // found") for any id its own internal dataLayer doesn't have yet. The
+    // caller (App's handleAddLayer/handleDeleteLayer) is responsible for
+    // sequencing loadLayers() before switching to a new layer id, but this
+    // still fires as an effect on every activeLayerId change from whatever
+    // App renders — a defensive check against layerIdsRef (the layer set
+    // this canvas actually knows about right now) turns any future
+    // ordering slip into a silent no-op instead of an uncaught exception
+    // that aborts the rest of React's effect flush.
+    useEffect(() => {
+      if (!layerIdsRef.current.includes(activeLayerId)) return;
+      dottingRef.current?.setCurrentLayer(activeLayerId);
+    }, [activeLayerId]);
 
     useEffect(() => {
       const ref = dottingRef.current;

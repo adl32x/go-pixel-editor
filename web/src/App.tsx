@@ -27,6 +27,10 @@ export default function App() {
   const [frameId, setFrameId] = useState<string | null>(null);
   const [clipName, setClipName] = useState<string | null>(null);
   const [brushColor, setBrushColor] = useState("#000000");
+  // Which layer new strokes land on — persists across frame switches within
+  // the same sprite (the layer set doesn't change when you switch frames),
+  // reset to the topmost layer whenever a different sprite is opened.
+  const [activeLayerId, setActiveLayerId] = useState("");
   const [initLayers, setInitLayers] = useState<LayerProps[]>(EMPTY_LAYERS);
   // The project's single shared palette — every sprite draws from this same
   // list (see internal/sprite Settings), fetched once rather than per-sprite.
@@ -84,6 +88,7 @@ export default function App() {
       setClipName(s.clips[0]?.name ?? null);
       setFrameId(firstFrameId);
       setInitLayers(layers);
+      setActiveLayerId(s.layers[0]?.id ?? "");
     })();
   }, [spriteId]);
 
@@ -138,18 +143,63 @@ export default function App() {
     await refreshSprite(spriteId);
   }
 
+  // Re-fetches the active frame and pushes it into the already-mounted
+  // canvas via the same imperative path frame-switching uses. Needed
+  // whenever something changes the frame's *data* out from under the open
+  // canvas without changing the sprite/frame identity that key={sprite.id}
+  // watches: a palette remap, or a layer being added/removed (the layer
+  // *set* itself, not just pixel content — see DottingCanvas's
+  // layerIdsRef for why that needs the same loadLayers path, not a diff).
+  async function reloadActiveFrame() {
+    if (!spriteId || !frameId) return;
+    const layers = await api.getFrame(spriteId, frameId);
+    setInitLayers(layers);
+    canvasRef.current?.loadLayers(layers);
+  }
+
   // Changing the palette (PaletteSettings, via PUT /api/palette) remaps
   // every sprite's *on-disk* pixel data to the new palette — but the
   // currently-mounted <DottingCanvas>, if any, is still showing whatever it
-  // loaded at mount time. Re-fetch the active frame and push it in through
-  // the same imperative path selectFrame uses (identity hasn't changed, so
-  // no key={sprite.id} remount happens on its own).
+  // loaded at mount time.
   async function handleSettingsChanged(updated: Settings) {
     setSettings(updated);
-    if (spriteId && frameId) {
-      const layers = await api.getFrame(spriteId, frameId);
-      setInitLayers(layers);
-      canvasRef.current?.loadLayers(layers);
+    await reloadActiveFrame();
+  }
+
+  // Adding a layer retrofits a blank block onto every frame server-side
+  // (see sprite.AddLayer) — the new layer becomes the topmost one, both in
+  // sprite.layers[0] and as the one the user almost certainly wants to draw
+  // on immediately, so it becomes the active layer too.
+  //
+  // This refreshes initLayers directly (via api.getFrame) rather than going
+  // through reloadActiveFrame()'s imperative canvasRef.loadLayers() call.
+  // loadLayers() ultimately calls dotting's own setLayers() on the *already
+  // mounted* editor, which corrupts its internal state (this.interactionLayer
+  // goes undefined on the next render — confirmed live, not hypothetical)
+  // whenever the *number* of layers differs from what it was initialized
+  // with. <DottingCanvas>'s key includes the sprite's layer-id list (see
+  // below), so updating both sprite and initLayers here — before
+  // setActiveLayerId, which must not fire dotting's setCurrentLayer for a
+  // layer id it doesn't know about yet either — makes React remount a fresh
+  // instance with the right layers from the start instead of mutating a
+  // stale one.
+  async function handleAddLayer(name: string) {
+    if (!spriteId || !frameId) return;
+    const updated = await api.addLayer(spriteId, name);
+    const layers = await api.getFrame(spriteId, frameId);
+    setSprite(updated);
+    setInitLayers(layers);
+    setActiveLayerId(updated.layers[0]?.id ?? "");
+  }
+
+  async function handleDeleteLayer(layerId: string) {
+    if (!spriteId || !frameId) return;
+    const updated = await api.deleteLayer(spriteId, layerId);
+    const layers = await api.getFrame(spriteId, frameId);
+    setSprite(updated);
+    setInitLayers(layers);
+    if (activeLayerId === layerId) {
+      setActiveLayerId(updated.layers[0]?.id ?? "");
     }
   }
 
@@ -201,11 +251,23 @@ export default function App() {
 
               {initLayers.length > 0 ? (
                 <DottingCanvas
-                  key={sprite.id}
+                  // dotting's setLayers()/loadLayers() corrupts its internal
+                  // editor state (this.interactionLayer goes undefined on
+                  // the next render — a confirmed bug, not just a risk) when
+                  // called on a mounted instance whose *layer count* differs
+                  // from what it was initialized with, not only when the
+                  // grid dimensions differ. Layer add/delete changes the
+                  // layer count, so — like a sprite switch — it needs a full
+                  // remount with fresh initLayers rather than an imperative
+                  // update; see handleAddLayer/handleDeleteLayer, which
+                  // refresh initLayers themselves instead of going through
+                  // reloadActiveFrame()'s loadLayers() call for this reason.
+                  key={sprite.id + ":" + sprite.layers.map((l) => l.id).join(",")}
                   ref={canvasRef}
                   initLayers={initLayers}
                   brushTool={BrushTool.DOT}
                   brushColor={brushColor}
+                  activeLayerId={activeLayerId}
                   onChange={handleCanvasChange}
                 />
               ) : (
@@ -214,7 +276,14 @@ export default function App() {
                 </p>
               )}
 
-              <LayerPanel layers={sprite.layers} onChange={handleLayersChange} />
+              <LayerPanel
+                layers={sprite.layers}
+                activeLayerId={activeLayerId}
+                onSelectLayer={setActiveLayerId}
+                onChange={handleLayersChange}
+                onAddLayer={handleAddLayer}
+                onDeleteLayer={handleDeleteLayer}
+              />
             </div>
 
             <Timeline

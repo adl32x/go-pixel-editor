@@ -47,6 +47,9 @@ func Run(args []string) error {
 	mux.HandleFunc("PUT /api/sprites/{id}/frames/{frameId}", handlePutFrame)
 	mux.HandleFunc("DELETE /api/sprites/{id}/frames/{frameId}", handleDeleteFrame)
 
+	mux.HandleFunc("POST /api/sprites/{id}/layers", handleAddLayer)
+	mux.HandleFunc("DELETE /api/sprites/{id}/layers/{layerId}", handleDeleteLayer)
+
 	mux.HandleFunc("GET /api/sprites/{id}/clips", handleListClips)
 	mux.HandleFunc("POST /api/sprites/{id}/clips", handleCreateClip)
 	mux.HandleFunc("PATCH /api/sprites/{id}/clips/{name}", handlePatchClip)
@@ -263,6 +266,45 @@ func handleDeleteFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type addLayerRequest struct {
+	Name string `json:"name"`
+}
+
+// handleAddLayer adds a new (topmost) layer to the sprite, retrofitting a
+// blank block onto every existing frame (see sprite.AddLayer) — the only
+// safe way to add a layer once frames already exist.
+func handleAddLayer(w http.ResponseWriter, r *http.Request) {
+	s := findSprite(w, r.PathValue("id"))
+	if s == nil {
+		return
+	}
+	var req addLayerRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if _, err := sprite.AddLayer(s, req.Name); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeSprite(w, *s)
+}
+
+// handleDeleteLayer removes a layer and strips its block from every
+// existing frame (see sprite.DeleteLayer); refuses to remove a sprite's
+// last layer.
+func handleDeleteLayer(w http.ResponseWriter, r *http.Request) {
+	s := findSprite(w, r.PathValue("id"))
+	if s == nil {
+		return
+	}
+	if err := sprite.DeleteLayer(s, r.PathValue("layerId")); err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	writeSprite(w, *s)
 }
 
 func handleListClips(w http.ResponseWriter, r *http.Request) {
