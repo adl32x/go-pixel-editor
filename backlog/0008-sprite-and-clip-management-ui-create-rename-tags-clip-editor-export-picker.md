@@ -4,6 +4,8 @@ title: Sprite and clip management UI (create/rename/tags, clip editor, export pi
 status: done
 priority: medium
 tags: frontend
+x: 669.2177020988402
+y: 979.8764457300638
 ---
 
 `SpriteList.tsx` (list/create/select sprites), `SpriteMeta.tsx` (name/tags editor for

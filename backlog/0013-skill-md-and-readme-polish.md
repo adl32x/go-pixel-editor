@@ -4,6 +4,8 @@ title: SKILL.md and README polish
 status: done
 priority: low
 tags: docs
+x: 662.9188786827792
+y: 717.8632812553858
 ---
 
 Write this project's own `SKILL.md` (agent-oriented: sprite/frame/clip file format,

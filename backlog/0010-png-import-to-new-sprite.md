@@ -4,6 +4,8 @@ title: PNG import to new sprite
 status: todo
 priority: medium
 tags: backend, import
+x: -73.98605153400912
+y: 205.62393301792352
 ---
 
 Import an existing PNG (e.g. reference art, or a sprite sheet exported from another

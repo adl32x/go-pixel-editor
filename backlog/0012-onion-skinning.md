@@ -4,6 +4,8 @@ title: Onion-skinning
 status: todo
 priority: low
 tags: frontend, animation
+x: -344.95584226999733
+y: -215.59245658002027
 ---
 
 Show a ghosted overlay of the previous/next frame(s) while editing the active frame in

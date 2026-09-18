@@ -4,6 +4,8 @@ title: Scaffold Go module + Makefile + CI
 status: done
 priority: high
 tags: infra
+x: 676.0077952790293
+y: -180.6732599476453
 ---
 
 `go.mod` (module `github.com/adl32x/go-pixel-editor`, go 1.26, zero direct deps —

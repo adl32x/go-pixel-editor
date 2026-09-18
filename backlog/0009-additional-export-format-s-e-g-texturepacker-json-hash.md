@@ -4,6 +4,8 @@ title: Additional export format(s) (e.g. TexturePacker JSON-hash)
 status: todo
 priority: medium
 tags: backend, export
+x: -347.5481109745669
+y: 198.93970329577857
 ---
 
 The user wants export format configurable "depending on the game I'm targeting" — #0003

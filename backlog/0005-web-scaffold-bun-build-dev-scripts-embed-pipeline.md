@@ -4,6 +4,8 @@ title: Web scaffold: Bun build/dev scripts, embed pipeline
 status: done
 priority: high
 tags: frontend, infra
+x: 665.4841759157657
+y: 176.22936303685233
 ---
 
 Bun is the bundler here (not Vite, unlike go-backlog-cli's reference setup — explicit

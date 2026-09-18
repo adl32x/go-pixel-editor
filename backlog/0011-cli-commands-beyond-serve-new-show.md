@@ -4,6 +4,8 @@ title: CLI commands beyond serve (new, show)
 status: done
 priority: medium
 tags: cli
+x: 663.7741848425671
+y: 876.6402552569599
 ---
 
 The initial pass's `main.go` covers `list`/`new`/`show`/`export`/`serve`/`version`/`help`

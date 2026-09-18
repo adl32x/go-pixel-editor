@@ -4,6 +4,8 @@ title: Timeline/playback UI (frame list, scrubber, fps, loop mode)
 status: done
 priority: high
 tags: frontend, animation
+x: 665.9672075115102
+y: 538.245356438004
 ---
 
 Fully custom (dotting has no animation concept at all). `Timeline.tsx`: horizontal frame

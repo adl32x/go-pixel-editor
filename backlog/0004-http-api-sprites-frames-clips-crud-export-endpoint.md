@@ -4,6 +4,8 @@ title: HTTP API: sprites/frames/clips CRUD + export endpoint
 status: done
 priority: high
 tags: backend, api
+x: 665.5786411947843
+y: 80.1384954027389
 ---
 
 Thin HTTP layer over `internal/sprite` + `internal/export`, stdlib `net/http.ServeMux`

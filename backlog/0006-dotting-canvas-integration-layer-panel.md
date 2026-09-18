@@ -4,6 +4,8 @@ title: Dotting canvas integration + layer panel
 status: done
 priority: high
 tags: frontend, canvas
+x: 660.9469136277505
+y: 633.712115764475
 ---
 
 `DottingCanvas.tsx` wraps `<Dotting ref width height initLayers brushTool brushColor />`

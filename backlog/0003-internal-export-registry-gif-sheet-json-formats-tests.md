@@ -4,6 +4,8 @@ title: internal/export registry + gif/sheet-json formats + tests
 status: done
 priority: high
 tags: backend, export
+x: 663.8156529898988
+y: -13.014358332043916
 ---
 
 Pluggable export so output format is configurable per target game/engine, not fixed in

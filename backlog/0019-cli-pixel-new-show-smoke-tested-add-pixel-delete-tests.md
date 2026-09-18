@@ -4,6 +4,8 @@ title: Add pixel delete <id> command + CLI tests
 status: todo
 priority: low
 tags: cli
+x: -343.676450464312
+y: -297.8107284123365
 ---
 
 `pixel new`/`pixel show`/`pixel export`/`pixel serve` are implemented in main.go
