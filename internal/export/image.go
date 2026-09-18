@@ -82,8 +82,9 @@ func clamp01(f float64) float64 {
 // compositeFrame flattens every visible sprite layer of f (bottom to top —
 // Sprite.Layers is stored topmost-first, so this walks it in reverse) into
 // one NRGBA image, honoring each layer's opacity. Colors that don't parse
-// as #rrggbb(aa) are skipped rather than failing the whole export.
-func compositeFrame(s sprite.Sprite, f sprite.Frame) (*image.NRGBA, error) {
+// as #rrggbb(aa) are skipped rather than failing the whole export. settings
+// resolves palette chars to colors (the project's single shared palette).
+func compositeFrame(s sprite.Sprite, f sprite.Frame, settings sprite.Settings) (*image.NRGBA, error) {
 	img := image.NewNRGBA(image.Rect(0, 0, s.Width, s.Height))
 	for i := len(s.Layers) - 1; i >= 0; i-- {
 		ld := s.Layers[i]
@@ -102,7 +103,7 @@ func compositeFrame(s sprite.Sprite, f sprite.Frame) (*image.NRGBA, error) {
 				if ch == '.' {
 					continue
 				}
-				colorStr, ok := s.CharToColor(ch)
+				colorStr, ok := settings.CharToColor(ch)
 				if !ok {
 					return nil, fmt.Errorf("frame %s: unknown palette char %q", f.ID, ch)
 				}

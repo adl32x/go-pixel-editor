@@ -3,6 +3,8 @@ import type {
   ClipPatch,
   ExportFormat,
   LayerProps,
+  PalettePresetInfo,
+  Settings,
   Sprite,
   SpritePatch,
   SpriteSummary,
@@ -139,4 +141,29 @@ export function exportUrl(spriteId: string, format: string, clip?: string): stri
 export function exportFramePngUrl(spriteId: string, frameId: string): string {
   const params = new URLSearchParams({ frame: frameId });
   return `${BASE}/sprites/${spriteId}/export.png?${params.toString()}`;
+}
+
+// -- palette ---------------------------------------------------------------
+// The project's single shared palette — every sprite draws from this same
+// list, there is no more per-sprite palette (see internal/sprite Settings).
+
+export function getPalette(): Promise<Settings> {
+  return request("/palette");
+}
+
+export function listPalettePresets(): Promise<PalettePresetInfo[]> {
+  return request("/palette-presets");
+}
+
+export function getPalettePreset(id: string): Promise<{ colors: string[] }> {
+  return request(`/palette-presets/${encodeURIComponent(id)}`);
+}
+
+// Switching the palette (preset or custom colors) remaps every sprite's
+// existing pixels to the nearest matching color in the new one — there is
+// no endpoint that just overwrites the palette in place (see
+// sprite.RemapPalette). This is a bulk, lossy, project-wide operation; the
+// caller should warn before invoking it.
+export function putPalette(input: { presetId: string } | { colors: string[] }): Promise<Settings> {
+  return request("/palette", { method: "PUT", body: JSON.stringify(input) });
 }

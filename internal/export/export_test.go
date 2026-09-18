@@ -6,9 +6,14 @@ import (
 	"github.com/adl32x/go-pixel-editor/internal/sprite"
 )
 
-func testSprite(t *testing.T) (sprite.Sprite, []sprite.Frame) {
+func testSprite(t *testing.T) (sprite.Sprite, []sprite.Frame, sprite.Settings) {
 	t.Helper()
 	t.Chdir(t.TempDir())
+
+	settings, err := sprite.LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings: %v", err)
+	}
 
 	s, err := sprite.NewSprite("Eye", 2, 2, "")
 	if err != nil {
@@ -20,17 +25,14 @@ func testSprite(t *testing.T) (sprite.Sprite, []sprite.Frame) {
 		if err != nil {
 			t.Fatalf("AddFrame: %v", err)
 		}
-		layerProps, err := f.ToLayerProps(s)
+		layerProps, err := f.ToLayerProps(s, settings)
 		if err != nil {
 			t.Fatalf("ToLayerProps: %v", err)
 		}
-		layerProps[0].Data[0][0].Color = "#ff0000"
-		nf, err := sprite.FrameFromLayerProps(&s, f.ID, layerProps)
+		layerProps[0].Data[0][0].Color = settings.Palette[0].Color
+		nf, err := sprite.FrameFromLayerProps(s, f.ID, layerProps, settings)
 		if err != nil {
 			t.Fatalf("FrameFromLayerProps: %v", err)
-		}
-		if err := s.Save(); err != nil {
-			t.Fatalf("Save: %v", err)
 		}
 		if err := nf.Save(s); err != nil {
 			t.Fatalf("Frame.Save: %v", err)
@@ -50,16 +52,16 @@ func testSprite(t *testing.T) (sprite.Sprite, []sprite.Frame) {
 	if err != nil {
 		t.Fatalf("Find: %v", err)
 	}
-	return *reloaded, frames
+	return *reloaded, frames, settings
 }
 
 func TestGIFExport(t *testing.T) {
-	s, frames := testSprite(t)
+	s, frames, settings := testSprite(t)
 	f, ok := Get("gif")
 	if !ok {
 		t.Fatal("gif format not registered")
 	}
-	bundle, err := f.Export(s, frames, &s.Clips[0])
+	bundle, err := f.Export(s, frames, &s.Clips[0], settings)
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}
@@ -76,12 +78,12 @@ func TestGIFExport(t *testing.T) {
 }
 
 func TestSheetJSONExport(t *testing.T) {
-	s, frames := testSprite(t)
+	s, frames, settings := testSprite(t)
 	f, ok := Get("sheet-json")
 	if !ok {
 		t.Fatal("sheet-json format not registered")
 	}
-	bundle, err := f.Export(s, frames, &s.Clips[0])
+	bundle, err := f.Export(s, frames, &s.Clips[0], settings)
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}

@@ -22,7 +22,7 @@ type gifStep struct {
 
 // Export renders frames (a clip's entries in order, or every frame in file
 // order when clip is nil) as a single animated GIF.
-func (gifFormat) Export(s sprite.Sprite, frames []sprite.Frame, clip *sprite.Clip) (Bundle, error) {
+func (gifFormat) Export(s sprite.Sprite, frames []sprite.Frame, clip *sprite.Clip, settings sprite.Settings) (Bundle, error) {
 	steps, err := gifSteps(frames, clip)
 	if err != nil {
 		return Bundle{}, err
@@ -31,11 +31,11 @@ func (gifFormat) Export(s sprite.Sprite, frames []sprite.Frame, clip *sprite.Cli
 		return Bundle{}, fmt.Errorf("no frames to export")
 	}
 
-	pal := buildPalette(s)
+	pal := buildPalette(settings)
 
 	g := &gif.GIF{LoopCount: gifLoopCount(clip)}
 	for _, st := range steps {
-		img, err := compositeFrame(s, st.frame)
+		img, err := compositeFrame(s, st.frame, settings)
 		if err != nil {
 			return Bundle{}, err
 		}
@@ -104,12 +104,12 @@ func gifLoopCount(clip *sprite.Clip) int {
 	return 0
 }
 
-// buildPalette turns a sprite's own palette into a GIF color.Palette, with
-// a transparent entry at index 0 for empty pixels.
-func buildPalette(s sprite.Sprite) color.Palette {
-	pal := make(color.Palette, 0, len(s.Palette)+1)
+// buildPalette turns the project's shared palette into a GIF color.Palette,
+// with a transparent entry at index 0 for empty pixels.
+func buildPalette(settings sprite.Settings) color.Palette {
+	pal := make(color.Palette, 0, len(settings.Palette)+1)
 	pal = append(pal, color.NRGBA{})
-	for _, p := range s.Palette {
+	for _, p := range settings.Palette {
 		c, err := parseHexColor(p.Color)
 		if err != nil {
 			continue

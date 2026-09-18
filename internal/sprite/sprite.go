@@ -1,16 +1,26 @@
 // Package sprite implements a plain-text, git-friendly pixel-art sprite
-// format: one directory per sprite under sprites/, with sprite metadata
-// (canvas size, palette, layer stack, animation clips) in a hand-parsed
+// format: one directory per sprite under .pixel/sprites/, with sprite
+// metadata (canvas size, layer stack, animation clips) in a hand-parsed
 // sprite.md frontmatter+sections file, and each frame as its own small
-// palette-indexed text file under frames/. See frame.go for the frame
-// codec and clip.go for the animation-clip block format.
+// palette-indexed text file under frames/. See settings.go for the
+// project's single shared palette (every sprite's frames index into it, not
+// a per-sprite palette), frame.go for the frame codec, and clip.go for the
+// animation-clip block format.
 //
-//	sprites/
-//	  0001-eye/
-//	    sprite.md
-//	    frames/
-//	      f001.px
-//	      f002.px
+// Everything lives under a top-level .pixel/ dot-folder to keep a project's
+// repo root clean — this is still fully git-tracked, plain-text, diffable
+// data (the whole point of this tool), not a build cache or ignored
+// directory; dot-prefixing is purely a "keep the repo root tidy" convention,
+// the same reason tools like .vscode/ or .github/ use one.
+//
+//	.pixel/
+//	  settings.md
+//	  sprites/
+//	    0001-eye/
+//	      sprite.md
+//	      frames/
+//	        f001.px
+//	        f002.px
 package sprite
 
 import (
@@ -26,7 +36,7 @@ import (
 
 // Dir is the folder (relative to the current working directory) that holds
 // sprite directories.
-const Dir = "sprites"
+const Dir = ".pixel/sprites"
 
 // paletteAlphabet is the ordered set of single-character palette codes a
 // sprite can allocate. '.' is reserved (meaning "no pixel") and is never a
@@ -35,7 +45,7 @@ const Dir = "sprites"
 const paletteAlphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 // Sprite is a single pixel-art asset, backed by a sprite.md file plus a
-// frames/ directory, both under one sprites/<id>-<slug>/ directory.
+// frames/ directory, both under one .pixel/sprites/<id>-<slug>/ directory.
 type Sprite struct {
 	ID      string    `json:"id"`
 	Name    string    `json:"name"`
@@ -45,17 +55,16 @@ type Sprite struct {
 	Created time.Time `json:"created"`
 	Updated time.Time `json:"updated"`
 
-	Palette []PaletteEntry `json:"palette"`
-	Layers  []LayerDef     `json:"layers"`
-	Clips   []Clip         `json:"clips"`
+	Layers []LayerDef `json:"layers"`
+	Clips  []Clip     `json:"clips"`
 
 	Path string `json:"-"`
 }
 
 // PaletteEntry maps a single-character code (from paletteAlphabet) to a CSS
 // color string, exactly as used by the frame codec and by dotting's
-// PixelModifyItem.Color. Allocation is append-only: a char's color never
-// changes once written (see Sprite.ColorToChar).
+// PixelModifyItem.Color. See settings.go — this is now the project's single
+// shared palette, not a per-sprite one.
 type PaletteEntry struct {
 	Char  string `json:"char"`
 	Color string `json:"color"`
@@ -155,34 +164,6 @@ func Find(id string) (*Sprite, error) {
 	return nil, nil
 }
 
-// ColorToChar resolves color to its palette character, allocating a new
-// append-only entry if the color hasn't been seen before. Returns an error
-// if the palette is already at its 62-color cap.
-func (s *Sprite) ColorToChar(color string) (rune, error) {
-	for _, p := range s.Palette {
-		if p.Color == color {
-			return firstRune(p.Char), nil
-		}
-	}
-	if len(s.Palette) >= len(paletteAlphabet) {
-		return 0, fmt.Errorf("sprite %s: palette full (%d colors, max %d)", s.ID, len(s.Palette), len(paletteAlphabet))
-	}
-	ch := rune(paletteAlphabet[len(s.Palette)])
-	s.Palette = append(s.Palette, PaletteEntry{Char: string(ch), Color: color})
-	return ch, nil
-}
-
-// CharToColor is the reverse lookup used when expanding a frame's compact
-// grid back into full pixel data.
-func (s Sprite) CharToColor(ch rune) (string, bool) {
-	for _, p := range s.Palette {
-		if firstRune(p.Char) == ch {
-			return p.Color, true
-		}
-	}
-	return "", false
-}
-
 func firstRune(s string) rune {
 	for _, r := range s {
 		return r
@@ -225,7 +206,7 @@ func splitTags(tags string) []string {
 
 // parseSpriteFile reads and parses one sprite.md file: a frontmatter block
 // (same hand-rolled key:value scanner as go-backlog-cli's ticket.go) followed
-// by "## palette" / "## layers" / "## clips" sections.
+// by "## layers" / "## clips" sections.
 func parseSpriteFile(path string) (*Sprite, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -280,7 +261,6 @@ func parseSpriteFile(path string) (*Sprite, error) {
 		Created: created,
 		Updated: updated,
 		Path:    path,
-		Palette: []PaletteEntry{},
 		Layers:  []LayerDef{},
 		Clips:   []Clip{},
 	}
@@ -292,7 +272,7 @@ func parseSpriteFile(path string) (*Sprite, error) {
 }
 
 // parseSections walks the lines after the frontmatter block, dispatching
-// into the "## palette", "## layers" and "## clips" sections. Section and
+// into the "## layers" and "## clips" sections. Section and
 // clip headers must be unindented; frame-entry lines inside a clip's
 // "frames:" list must be indented — that distinction is how the scanner
 // tells a section boundary from a list item.
@@ -323,10 +303,6 @@ func parseSections(lines []string, s *Sprite) error {
 		}
 
 		switch section {
-		case "palette":
-			if err := parsePaletteLine(s, trimmed); err != nil {
-				return err
-			}
 		case "layers":
 			if err := parseLayerLine(s, trimmed); err != nil {
 				return err
@@ -354,20 +330,6 @@ func parseSections(lines []string, s *Sprite) error {
 			}
 		}
 	}
-	return nil
-}
-
-func parsePaletteLine(s *Sprite, line string) error {
-	idx := strings.Index(line, " = ")
-	if idx == -1 {
-		return fmt.Errorf("invalid palette line: %q", line)
-	}
-	char := line[:idx]
-	color := line[idx+3:]
-	if len([]rune(char)) != 1 {
-		return fmt.Errorf("invalid palette char: %q", char)
-	}
-	s.Palette = append(s.Palette, PaletteEntry{Char: char, Color: color})
 	return nil
 }
 
@@ -419,14 +381,6 @@ func (s Sprite) Save() error {
 	fmt.Fprintf(&b, "created: %s\n", s.Created.UTC().Format(time.RFC3339))
 	fmt.Fprintf(&b, "updated: %s\n", s.Updated.UTC().Format(time.RFC3339))
 	fmt.Fprintln(&b, "---")
-
-	if len(s.Palette) > 0 {
-		fmt.Fprintln(&b)
-		fmt.Fprintln(&b, "## palette")
-		for _, p := range s.Palette {
-			fmt.Fprintf(&b, "%s = %s\n", p.Char, p.Color)
-		}
-	}
 
 	if len(s.Layers) > 0 {
 		fmt.Fprintln(&b)

@@ -66,10 +66,11 @@ func (b Bundle) Payload() ([]byte, string, error) {
 
 // Format is one exportable output — a query-param/CLI-flag value (Name)
 // plus the logic to render a sprite (optionally scoped to one clip) into a
-// Bundle.
+// Bundle. settings resolves palette chars to colors (the project's single
+// shared palette — see internal/sprite's settings.go).
 type Format interface {
 	Name() string
-	Export(s sprite.Sprite, frames []sprite.Frame, clip *sprite.Clip) (Bundle, error)
+	Export(s sprite.Sprite, frames []sprite.Frame, clip *sprite.Clip, settings sprite.Settings) (Bundle, error)
 }
 
 var registry = map[string]Format{}

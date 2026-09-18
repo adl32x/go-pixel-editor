@@ -55,7 +55,7 @@ type sheetDataJSON struct {
 // Aseprite-style data.json describing each frame's rect/duration and, in
 // "frameTags", the sprite's clip(s) — so common engine importers (e.g.
 // Phaser's load.aseprite) can consume the pair directly.
-func (sheetJSONFormat) Export(s sprite.Sprite, frames []sprite.Frame, clip *sprite.Clip) (Bundle, error) {
+func (sheetJSONFormat) Export(s sprite.Sprite, frames []sprite.Frame, clip *sprite.Clip, settings sprite.Settings) (Bundle, error) {
 	if len(frames) == 0 {
 		return Bundle{}, fmt.Errorf("no frames to export")
 	}
@@ -68,7 +68,7 @@ func (sheetJSONFormat) Export(s sprite.Sprite, frames []sprite.Frame, clip *spri
 	for i, f := range frames {
 		frameIndex[f.ID] = i
 
-		img, err := compositeFrame(s, f)
+		img, err := compositeFrame(s, f, settings)
 		if err != nil {
 			return Bundle{}, err
 		}

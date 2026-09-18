@@ -6,17 +6,21 @@ import DottingCanvas, {
 } from "./canvas/DottingCanvas";
 import LayerPanel from "./layers/LayerPanel";
 import PaletteBar from "./palette/PaletteBar";
+import PaletteSettings from "./settings/PaletteSettings";
 import ClipEditor from "./sprites/ClipEditor";
 import SpriteList from "./sprites/SpriteList";
 import SpriteMeta from "./sprites/SpriteMeta";
 import PlaybackControls from "./timeline/PlaybackControls";
 import Timeline from "./timeline/Timeline";
 import { spriteStore } from "./state/spriteStore";
-import type { LayerProps, Sprite, SpriteSummary } from "./types";
+import type { LayerProps, Settings, Sprite, SpriteSummary } from "./types";
 
 const EMPTY_LAYERS: LayerProps[] = [];
 
+type View = "sprites" | "settings";
+
 export default function App() {
+  const [view, setView] = useState<View>("sprites");
   const [sprites, setSprites] = useState<SpriteSummary[]>([]);
   const [spriteId, setSpriteId] = useState<string | null>(null);
   const [sprite, setSprite] = useState<Sprite | null>(null);
@@ -24,10 +28,17 @@ export default function App() {
   const [clipName, setClipName] = useState<string | null>(null);
   const [brushColor, setBrushColor] = useState("#000000");
   const [initLayers, setInitLayers] = useState<LayerProps[]>(EMPTY_LAYERS);
+  // The project's single shared palette — every sprite draws from this same
+  // list (see internal/sprite Settings), fetched once rather than per-sprite.
+  const [settings, setSettings] = useState<Settings | null>(null);
   const canvasRef = useRef<DottingCanvasHandle>(null);
 
   const refreshSprites = useCallback(async () => {
     setSprites(await api.listSprites());
+  }, []);
+
+  useEffect(() => {
+    api.getPalette().then(setSettings);
   }, []);
 
   const refreshSprite = useCallback(async (id: string) => {
@@ -127,27 +138,63 @@ export default function App() {
     await refreshSprite(spriteId);
   }
 
+  // Changing the palette (PaletteSettings, via PUT /api/palette) remaps
+  // every sprite's *on-disk* pixel data to the new palette — but the
+  // currently-mounted <DottingCanvas>, if any, is still showing whatever it
+  // loaded at mount time. Re-fetch the active frame and push it in through
+  // the same imperative path selectFrame uses (identity hasn't changed, so
+  // no key={sprite.id} remount happens on its own).
+  async function handleSettingsChanged(updated: Settings) {
+    setSettings(updated);
+    if (spriteId && frameId) {
+      const layers = await api.getFrame(spriteId, frameId);
+      setInitLayers(layers);
+      canvasRef.current?.loadLayers(layers);
+    }
+  }
+
   const clip = sprite?.clips.find((c) => c.name === clipName) ?? null;
 
   return (
     <div className="app">
       <aside className="app-sidebar">
-        <SpriteList
-          sprites={sprites}
-          selectedId={spriteId}
-          onSelect={setSpriteId}
-          onCreate={handleCreateSprite}
-        />
+        <nav className="app-nav">
+          <button
+            type="button"
+            className={"app-nav-tab" + (view === "sprites" ? " selected" : "")}
+            onClick={() => setView("sprites")}
+          >
+            Sprites
+          </button>
+          <button
+            type="button"
+            className={"app-nav-tab" + (view === "settings" ? " selected" : "")}
+            onClick={() => setView("settings")}
+          >
+            Settings
+          </button>
+        </nav>
+
+        {view === "sprites" && (
+          <SpriteList
+            sprites={sprites}
+            selectedId={spriteId}
+            onSelect={setSpriteId}
+            onCreate={handleCreateSprite}
+          />
+        )}
       </aside>
 
       <main className="app-main">
-        {sprite ? (
+        {view === "settings" ? (
+          <PaletteSettings settings={settings} onSettingsChanged={handleSettingsChanged} />
+        ) : sprite ? (
           <>
             <SpriteMeta sprite={sprite} onSave={handleSaveMeta} />
 
             <div className="app-workspace">
               <PaletteBar
-                palette={sprite.palette}
+                palette={settings?.palette ?? []}
                 brushColor={brushColor}
                 onSelectColor={setBrushColor}
               />

@@ -1,6 +1,6 @@
 // Command pixel is a git-friendly pixel-art editor: a CLI plus a
 // browser-based canvas/timeline editor (`pixel serve`). It operates on a
-// `sprites/` directory in the current working directory — run it from
+// `.pixel/sprites/` directory in the current working directory — run it from
 // inside whichever git repo you want to track sprites for.
 package main
 
@@ -69,9 +69,9 @@ Commands:
   export <id>                   Export a sprite
     --clip=<name>                  (default: all frames, in file order)
     --format=gif|sheet-json        (default: sheet-json)
-    --out=<path>                   (default: sprites/<id>-<slug>/export.<ext>)
+    --out=<path>                   (default: .pixel/sprites/<id>-<slug>/export.<ext>)
   serve                          Open the browser-based canvas/timeline editor
-    --port=NNNN                    (default: 7777)
+    --port=NNNN                    (default: 7788)
     --no-open                      Don't launch the browser automatically
   version                       Print the pixel version
   help                          Show this help message`)
@@ -189,7 +189,11 @@ func runExport(args []string) error {
 	if err != nil {
 		return err
 	}
-	bundle, err := format.Export(*s, frames, clip)
+	settings, err := sprite.LoadSettings()
+	if err != nil {
+		return err
+	}
+	bundle, err := format.Export(*s, frames, clip, settings)
 	if err != nil {
 		return err
 	}

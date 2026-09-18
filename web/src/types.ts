@@ -44,7 +44,6 @@ export interface Sprite {
   width: number;
   height: number;
   tags: string[];
-  palette: PaletteEntry[];
   layers: LayerDef[];
   clips: Clip[];
   // Computed at read time from frames/*.px on disk — not stored in
@@ -52,6 +51,20 @@ export interface Sprite {
   frameIds: string[];
   created?: string;
   updated?: string;
+}
+
+// The project's single shared palette (GET /api/palette) — every sprite's
+// frames index into this same list; there is no more per-sprite palette.
+export interface Settings {
+  activePreset: string;
+  palette: PaletteEntry[];
+  updated?: string;
+}
+
+export interface PalettePresetInfo {
+  id: string;
+  name: string;
+  colorCount: number;
 }
 
 export interface SpriteSummary {

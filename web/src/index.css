@@ -42,6 +42,29 @@ body {
   border-right: 1px solid var(--mac-border);
 }
 
+.app-nav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: var(--mac-radius-control);
+  padding: 2px;
+}
+
+.app-nav-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: calc(var(--mac-radius-control) - 2px);
+  padding: 4px 8px;
+}
+
+.app-nav-tab.selected {
+  background: var(--mac-panel-bg);
+  box-shadow: var(--mac-shadow-panel);
+}
+
 .app-main {
   flex: 1;
   padding: 20px 24px;
@@ -172,14 +195,40 @@ a {
   background: var(--mac-accent-hover);
 }
 
-.sprite-create, .clip-create {
+.clip-create {
   display: flex;
   gap: 6px;
   margin-top: 10px;
 }
 
-.sprite-create input {
-  width: 56px;
+.sprite-create {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.sprite-create-fields {
+  display: flex;
+  gap: 6px;
+}
+
+.sprite-create-fields input {
+  min-width: 0;
+}
+
+.sprite-create-fields input[type="text"],
+.sprite-create-fields input:not([type="number"]) {
+  flex: 1;
+}
+
+.sprite-create-fields input[type="number"] {
+  width: 48px;
+  flex: none;
+}
+
+.sprite-create-submit {
+  width: 100%;
 }
 
 .sprite-meta {
@@ -372,4 +421,74 @@ a {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.palette-settings {
+  background: var(--mac-panel-bg);
+  border: 1px solid var(--mac-border);
+  border-radius: var(--mac-radius-panel);
+  box-shadow: var(--mac-shadow-panel);
+  padding: 16px 20px;
+  max-width: 560px;
+}
+
+.palette-settings h4 {
+  margin: 16px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mac-text-secondary);
+}
+
+.palette-settings-hint {
+  color: var(--mac-text-secondary);
+  margin: 0;
+}
+
+.palette-settings-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preset-button.selected {
+  background: var(--mac-accent);
+  border-color: var(--mac-accent);
+  color: #fff;
+}
+
+.palette-settings-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.palette-settings-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.palette-settings-swatch input[type="color"] {
+  width: 32px;
+  height: 32px;
+  padding: 2px;
+}
+
+.palette-settings-swatch-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.palette-settings-swatch-actions button {
+  padding: 2px 4px;
+  font-size: 10px;
+}
+
+.palette-settings-add {
+  align-self: center;
+  height: 32px;
 }

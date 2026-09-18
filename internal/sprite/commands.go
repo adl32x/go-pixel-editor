@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// nextSpriteID scans existing sprites/<id>-<slug> directories for the
+// nextSpriteID scans existing .pixel/sprites/<id>-<slug> directories for the
 // highest numeric id and returns max+1, zero-padded to 4 digits.
 func nextSpriteID() (string, error) {
 	entries, err := os.ReadDir(Dir)
@@ -57,9 +57,8 @@ func NewSprite(name string, width, height int, tags string) (Sprite, error) {
 		ID: id, Name: name, Width: width, Height: height,
 		Tags:    splitTags(tags),
 		Created: now, Updated: now,
-		Palette: []PaletteEntry{},
-		Layers:  []LayerDef{{ID: "L1", Name: "base", Visible: true, Opacity: 1}},
-		Clips:   []Clip{},
+		Layers: []LayerDef{{ID: "L1", Name: "base", Visible: true, Opacity: 1}},
+		Clips:  []Clip{},
 	}
 	s.Path = filepath.Join(Dir, id+"-"+slugify(name), "sprite.md")
 	if err := s.Save(); err != nil {

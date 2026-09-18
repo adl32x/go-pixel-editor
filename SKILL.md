@@ -1,29 +1,58 @@
 ---
 name: pixel-editor
-description: Git-friendly pixel art editor. Use to view, create, or export sprites (plain-text sprite.md + frames/*.px) in a repo's sprites/ folder, or to launch the browser-based canvas/timeline editor.
+description: Git-friendly pixel art editor. Use to view, create, or export sprites (plain-text sprite.md + frames/*.px under .pixel/) in a repo, or to launch the browser-based canvas/timeline editor.
 ---
 
 # Skill: pixel editor
 
-Sprites are plain-text files in a `sprites/` directory **inside the current
+Sprites are plain-text files under a `.pixel/` directory **inside the current
 working directory** — always `cd` into the target repo first. There is no
-global/shared sprite store; each repo has its own.
+global/shared sprite store; each repo has its own. `.pixel/` sits in a
+dot-folder purely to keep the repo root tidy (same reason `.github/` exists)
+— it is fully git-tracked, plain-text, diffable data, not a build cache.
 
 ## On-disk format
 
-One directory per sprite: `sprites/NNNN-slug/`.
+```
+.pixel/
+  settings.md            # the project's one shared palette (see below)
+  sprites/
+    0001-eye/
+      sprite.md
+      frames/
+        f001.px
+        f002.px
+```
 
+`.pixel/settings.md` — the project's single shared color palette. Every
+sprite's frames index into this same list; there is no per-sprite palette.
+
+```markdown
+---
+active_preset: nes
+updated: 2026-09-17T09:00:00Z
+---
+
+## palette
+0 = #000000
+1 = #fcfcfc
+...
 ```
-sprites/0001-eye/
-  sprite.md
-  frames/
-    f001.px
-    f002.px
-```
+
+- `active_preset`: informational — which built-in preset (if any) this
+  matches; a custom edit just means it no longer matches one exactly.
+- `## palette`: one `<char> = <color>` line per color, in order — a pixel's
+  char is its *position* in this list. Alphabet is `0-9A-Za-z`, capping a
+  project at 62 distinct colors (see `internal/palette` for built-in presets:
+  `nes` — 55 colors, the default — and `pico8` — 16 colors). Unlike the old
+  per-sprite scheme, this list is fixed: drawing a color that isn't in it
+  snaps to the nearest match rather than growing the palette or erroring.
+  Changing the palette (a different preset, or an edit via the Settings page)
+  remaps every sprite's existing pixels to the nearest color in the new list.
 
 `sprite.md` — frontmatter (same hand-rolled `key: value` scanner as
-go-backlog-cli's tickets, no YAML lib) plus `## palette` / `## layers` /
-`## clips` sections:
+go-backlog-cli's tickets, no YAML lib) plus `## layers` / `## clips`
+sections:
 
 ```markdown
 ---
@@ -35,10 +64,6 @@ tags: ui, eye
 created: 2026-09-17T09:00:00Z
 updated: 2026-09-17T09:00:00Z
 ---
-
-## palette
-0 = #000000
-1 = #ffffff
 
 ## layers
 L1 base visible=true opacity=1
@@ -52,9 +77,6 @@ frames:
   f002
 ```
 
-- `## palette`: one `<char> = <color>` line per color, append-only (a char's
-  color never changes once written). Alphabet is `0-9A-Za-z` — a sprite caps
-  out at 62 distinct colors.
 - `## layers`: one line per layer, stack order (first line = topmost):
   `<id> <name> visible=<bool> opacity=<float>`.
 - `## clips`: repeated `### <name>` blocks. `loop:` is `none`, `forward`, or
@@ -64,7 +86,7 @@ frames:
   `  f008 @250` to override that entry's duration in milliseconds.
 
 `frames/fNNN.px` — one line per canvas row, one character per pixel, `.`
-meaning "no pixel", resolved through the sprite's palette:
+meaning "no pixel", resolved through the project's shared palette:
 
 ```
 frame: f001
@@ -88,19 +110,27 @@ pixel                            # list every sprite
 pixel new "<name>" --width= --height= --tags=
 pixel show <id>                  # print one sprite's sprite.md in full
 pixel export <id> --clip= --format=gif|sheet-json --out=
-pixel serve --port= --no-open    # browser-based canvas/timeline editor
+pixel serve --port= --no-open    # browser-based canvas/timeline editor (default port 7788)
 pixel version / help
 ```
 
 ## Browser editor (`pixel serve`)
 
-Starts a localhost HTTP server and opens a browser tab: a
-[dotting](https://github.com/hunkim98/dotting)-based pixel canvas plus a
-custom frame timeline and playback controls (dotting itself has no notion of
-frames/animation — only static layers — so the timeline, playback loop, and
-clip model are this project's own code, built on top of dotting's per-frame
-canvas). Create a sprite, draw pixels, add frames, group frames into a named
-clip with an fps/loop mode, and export.
+Starts a localhost HTTP server (port 7788 by default — deliberately not 7777,
+to avoid colliding with go-backlog-cli's `backlog serve` default) and opens a
+browser tab with two views, switched via a sidebar nav:
+
+- **Sprites** (default): a [dotting](https://github.com/hunkim98/dotting)-based
+  pixel canvas plus a custom frame timeline and playback controls (dotting
+  itself has no notion of frames/animation — only static layers — so the
+  timeline, playback loop, and clip model are this project's own code, built
+  on top of dotting's per-frame canvas). Create a sprite, draw pixels, add
+  frames, group frames into a named clip with an fps/loop mode, and export.
+- **Settings**: the project's palette editor. Pick a built-in preset or edit
+  individual colors (add/remove/reorder), then apply — this remaps every
+  sprite's existing pixels to the nearest matching color in the new palette
+  (a bulk, lossy, project-wide operation the UI warns about before
+  committing).
 
 ## Configurable export
 
@@ -123,7 +153,13 @@ changes needed.
 
 - `main.go` — subcommand dispatch (`list`, `new`, `show`, `export`, `serve`).
 - `internal/sprite/sprite.go` — `Sprite` struct, frontmatter+sections
-  parse/`Save`, `Load`/`Find`, palette char allocation.
+  parse/`Save`, `Load`/`Find`.
+- `internal/sprite/settings.go` — `Settings` (the project's single shared
+  palette), `LoadSettings`/`Save`, `ColorToChar`/`CharToColor` (exact match
+  or nearest-by-RGB-distance, never allocates/errors).
+- `internal/sprite/remap.go` — `RemapPalette`, the *only* supported way to
+  change the palette: rewrites every sprite's every frame's pixel chars to
+  the nearest color in the new palette before saving the new `Settings`.
 - `internal/sprite/frame.go` — `Frame` struct, the `.px` row codec,
   `LoadFrames`/`FindFrame`/`Frame.Save`.
 - `internal/sprite/clip.go` — `Clip`/`ClipEntry`/`LoopMode`, the `## clips`
@@ -132,13 +168,17 @@ changes needed.
   `DeleteFrame`, `NewClip`, `UpdateClip`, patch types.
 - `internal/sprite/convert.go` — `LayerProps`/`PixelModifyItem` (dotting's
   exact JSON shape) ⇄ `Frame` conversion.
+- `internal/palette/` — the built-in preset registry (`nes.go`, `pico8.go`),
+  mirroring `internal/export`'s `Format` registry shape.
 - `internal/export/` — the pluggable `Format` registry, `gif.go`,
   `sheet_json.go`, plus `image.go` (shared layer-compositing helper).
 - `internal/server/server.go` — HTTP API + embedded static file server
-  (`go:embed all:dist`).
+  (`go:embed all:dist`); `GET/PUT /api/palette`, `GET /api/palette-presets`
+  serve the Settings page.
 - `web/` — the `pixel serve` frontend: Bun (bundler + package manager,
   **not** Vite) + React + TypeScript + dotting, built to
   `internal/server/dist` and embedded via `go:embed`.
+  `web/src/settings/PaletteSettings.tsx` is the Settings-page component.
 
 ## Build & install
 

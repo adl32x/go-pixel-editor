@@ -2,6 +2,7 @@ package sprite
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 )
@@ -86,38 +87,93 @@ func TestUpdateSpriteReslugsOnRename(t *testing.T) {
 	}
 }
 
-func TestPaletteOverflow(t *testing.T) {
+// TestSettingsColorToCharExactAndNearest covers the project's single fixed
+// palette (see settings.go): an exact color match resolves to its char
+// without changing the palette, and an out-of-palette color snaps to the
+// nearest entry by RGB distance rather than allocating a new slot or
+// erroring — a real behavior change from the old per-sprite append-only
+// scheme, where a brand new color always grew the palette.
+func TestSettingsColorToCharExactAndNearest(t *testing.T) {
+	settings := Settings{
+		Palette: []PaletteEntry{
+			{Char: "0", Color: "#000000"},
+			{Char: "1", Color: "#ff0000"}, // pure red
+			{Char: "2", Color: "#0000ff"}, // pure blue
+		},
+	}
+
+	ch, err := settings.ColorToChar("#0000ff")
+	if err != nil {
+		t.Fatalf("exact match: %v", err)
+	}
+	if ch != '2' {
+		t.Fatalf("exact match char = %q, want '2'", ch)
+	}
+
+	// #e00000 (224,0,0) is much closer to pure red #ff0000 (distance 31²)
+	// than to black (distance 224²) or blue.
+	ch, err = settings.ColorToChar("#e00000")
+	if err != nil {
+		t.Fatalf("nearest match: %v", err)
+	}
+	if ch != '1' {
+		t.Fatalf("nearest match char = %q, want '1' (red)", ch)
+	}
+	if len(settings.Palette) != 3 {
+		t.Fatalf("palette len = %d, want unchanged 3 (snapping must not allocate)", len(settings.Palette))
+	}
+}
+
+// TestPaletteEntriesFromColorsTruncatesAt62 guards the interaction with
+// #0018: a preset with more colors than the single-char alphabet can
+// address (e.g. a 256-color VGA palette) must be truncated, not overflow
+// paletteAlphabet or panic.
+func TestPaletteEntriesFromColorsTruncatesAt62(t *testing.T) {
+	colors := make([]string, 100)
+	for i := range colors {
+		colors[i] = fmt.Sprintf("#%06x", i+1)
+	}
+	entries := paletteEntriesFromColors(colors)
+	if len(entries) != len(paletteAlphabet) {
+		t.Fatalf("truncated palette len = %d, want %d", len(entries), len(paletteAlphabet))
+	}
+	if entries[0].Color != colors[0] || entries[0].Char != "0" {
+		t.Fatalf("first entry = %+v, want char '0' color %s", entries[0], colors[0])
+	}
+}
+
+// TestLoadSettingsDefaultsToFirstPreset covers the on-disk default-creation
+// path: a fresh project with no pixel.settings.md yet gets one created from
+// the first registered palette preset.
+func TestLoadSettingsDefaultsToFirstPreset(t *testing.T) {
 	t.Chdir(t.TempDir())
 
-	s, err := NewSprite("Palette Test", 2, 2, "")
+	settings, err := LoadSettings()
 	if err != nil {
-		t.Fatalf("NewSprite: %v", err)
+		t.Fatalf("LoadSettings: %v", err)
+	}
+	if settings.ActivePreset == "" {
+		t.Fatal("expected a non-empty default ActivePreset")
+	}
+	if len(settings.Palette) == 0 {
+		t.Fatal("expected a non-empty default palette")
+	}
+	if _, err := os.Stat(SettingsPath); err != nil {
+		t.Fatalf("expected %s to be created on first load: %v", SettingsPath, err)
 	}
 
-	for i := 0; i < 62; i++ {
-		if _, err := s.ColorToChar(fmt.Sprintf("#%06x", i+1)); err != nil {
-			t.Fatalf("ColorToChar #%d: unexpected error: %v", i, err)
-		}
-	}
-	if len(s.Palette) != 62 {
-		t.Fatalf("palette len = %d, want 62", len(s.Palette))
-	}
-
-	// A color already in the palette must resolve to its existing char,
-	// not consume a new slot.
-	first, err := s.ColorToChar("#000001")
+	// A second load must read the same file back, not recreate a new
+	// default (which would be indistinguishable here, but reloading the
+	// exact same preset id and colors confirms Save/parse round-trip).
+	reloaded, err := LoadSettings()
 	if err != nil {
-		t.Fatalf("re-lookup of existing color failed: %v", err)
+		t.Fatalf("second LoadSettings: %v", err)
 	}
-	if first != rune(paletteAlphabet[0]) {
-		t.Fatalf("re-lookup char = %q, want %q", first, paletteAlphabet[0])
+	if reloaded.ActivePreset != settings.ActivePreset {
+		t.Fatalf("ActivePreset changed across reload: %q vs %q", reloaded.ActivePreset, settings.ActivePreset)
 	}
-	if len(s.Palette) != 62 {
-		t.Fatalf("palette len after re-lookup = %d, want unchanged 62", len(s.Palette))
-	}
-
-	if _, err := s.ColorToChar("#ffffff"); err == nil {
-		t.Fatalf("expected overflow error allocating a 63rd color, got nil")
+	if len(reloaded.Palette) != len(settings.Palette) {
+		t.Fatalf("palette len changed across reload: %d vs %d", len(reloaded.Palette), len(settings.Palette))
 	}
 }
 

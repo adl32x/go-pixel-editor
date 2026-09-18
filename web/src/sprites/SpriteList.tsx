@@ -41,24 +41,26 @@ export default function SpriteList({
         ))}
       </ul>
       <div className="sprite-create">
-        <input
-          placeholder="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <input
-          type="number"
-          min={1}
-          value={width}
-          onChange={(e) => setWidth(Number(e.target.value))}
-        />
-        <input
-          type="number"
-          min={1}
-          value={height}
-          onChange={(e) => setHeight(Number(e.target.value))}
-        />
-        <button type="button" onClick={handleCreate}>
+        <div className="sprite-create-fields">
+          <input
+            placeholder="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <input
+            type="number"
+            min={1}
+            value={width}
+            onChange={(e) => setWidth(Number(e.target.value))}
+          />
+          <input
+            type="number"
+            min={1}
+            value={height}
+            onChange={(e) => setHeight(Number(e.target.value))}
+          />
+        </div>
+        <button type="button" className="sprite-create-submit" onClick={handleCreate}>
           New sprite
         </button>
       </div>

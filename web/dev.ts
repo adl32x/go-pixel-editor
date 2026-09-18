@@ -1,11 +1,11 @@
 // Dev server: Bun's HTML-import bundler serves index.html (with hot reload
 // via `bun --hot dev.ts`), while any /api/* request is proxied to the Go
-// backend (`pixel serve`, default port 7777) — the dev-time equivalent of
+// backend (`pixel serve`, default port 7788) — the dev-time equivalent of
 // the reference project's vite.config.ts `server.proxy`.
 import index from "./index.html";
 
 const DEV_PORT = 5173;
-const API_TARGET = process.env.PIXEL_API_TARGET ?? "http://localhost:7777";
+const API_TARGET = process.env.PIXEL_API_TARGET ?? "http://localhost:7788";
 
 const server = Bun.serve({
   port: DEV_PORT,

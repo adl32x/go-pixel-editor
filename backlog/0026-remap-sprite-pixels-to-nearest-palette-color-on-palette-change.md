@@ -1,7 +1,7 @@
 ---
 id: 0026
 title: Remap sprite pixels to nearest palette color on palette change
-status: todo
+status: done
 priority: medium
 tags: backend, palette
 x: -336.3278071956675
@@ -36,6 +36,13 @@ good enough for a first cut. Note perceptual distance (e.g. weighted RGB or a
 CIE Lab conversion) as a possible future refinement if plain RGB produces
 visibly bad matches, but don't over-engineer it up front.
 
+**Already exists, reuse it**: `internal/sprite/settings.go` (#0027) has
+exactly this distance function already — `colorDistance`/`parseHexColor`,
+currently unexported and used by `Settings.ColorToChar`'s snap-to-nearest
+behavior. Either export it or add a small package-level helper that takes two
+palettes and returns the old-index→new-index table this ticket needs, rather
+than re-deriving the same RGB-distance math a second time.
+
 This is a bulk, project-wide, somewhat lossy operation (multiple old colors
 can collapse onto the same nearest new entry) — #0025's UI should warn clearly
 before triggering it, and it's worth considering whether the API should
@@ -45,3 +52,33 @@ the actual rewrite pass.
 Depends on #0024 (a palette to remap *to*) and #0027 (the single-palette
 architecture this rewrite operates within — must land first, not in parallel);
 #0025 is the UI trigger for this but this ticket is backend-only.
+
+---
+
+**Implemented** as `internal/sprite/remap.go`'s `RemapPalette(activePreset
+string, colors []string) (Settings, error)` — matches the mechanics described
+above closely: loads every sprite's every frame under the *old* (still
+on-disk) settings, builds an old-char→new-char table via `Settings
+.ColorToChar`'s existing nearest-match logic (kept as a method, not
+extracted into a standalone two-palette helper — `RemapPalette` just
+constructs the new `Settings` first and calls its own `ColorToChar` per old
+color, which turned out simpler than threading two palettes through a
+separate function), rewrites only the frames that actually contain a
+changed char (confirmed via `TestRemapPaletteLeavesUntouchedFramesAlone` that
+untouched frames aren't rewritten), and only saves the new `Settings` last —
+after every frame rewrite succeeds — so a reader never sees a palette that
+doesn't match what's on disk yet.
+
+No dry-run/preview endpoint was added — out of scope for this pass; #0025's
+UI warns via `confirm()` before calling it, which was judged sufficient for
+now given the existing codebase's precedent (`Timeline.tsx`'s delete
+confirmation) rather than adding new API surface for a preview.
+
+Two tests added (`internal/sprite/remap_test.go`):
+`TestRemapPaletteRewritesExistingFrames` — the core case, using a palette
+whose color-to-position order is deliberately shuffled between old and new,
+so a bug that left chars alone (instead of genuinely remapping by color)
+would be caught; and `TestRemapPaletteLeavesUntouchedFramesAlone` — a blank
+frame's file must not be rewritten if it has nothing to remap. Both pass
+under `go test -race`. Also verified live end-to-end through the browser
+(see #0025's done-note) with a real preset switch on a drawn sprite.

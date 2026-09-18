@@ -1,7 +1,7 @@
 ---
 id: 0024
 title: Pre-set color palettes (NES, SNES, DOS 256, etc.)
-status: todo
+status: done
 priority: medium
 tags: backend, palette, link:0024-0027
 x: -348.96975110159474
@@ -36,7 +36,21 @@ preset (not the full color lists, to keep the list endpoint light — a separate
 transitively #0025 (settings page needs something to list) and #0026 (remap
 needs a target palette to switch *to*).
 
-**Note**: the DOS/VGA 256 preset has more colors than a sprite's per-sprite
-palette can currently encode (62-char cap — see #0018). #0018 needs to land
-before or alongside this for the DOS-256 preset to actually be usable, not just
-listed.
+**Implemented as**: `internal/palette` (`palette.go` registry, `nes.go`,
+`pico8.go`), tested in `palette_test.go`. Shipped two presets:
+- **NES**: 55 deduplicated colors (Lospec's "Nintendo Entertainment System"
+  listing), confirmed accurate against the source rather than from memory.
+- **PICO-8** (16 colors, official palette) in place of "SNES" — as flagged
+  above, there's no single canonical SNES palette to cite, so this stands in
+  as the curated general-purpose retro palette rather than an invented
+  SNES-specific list. Named `pico8`, not `snes`, so it isn't mislabeled.
+
+**DOS/VGA 256 deferred, not shipped**: it would exceed the 62-color cap (see
+#0018) entirely — 256 > 62, not partially usable like a borderline case — so
+shipping a preset that mostly can't be selected felt worse than not shipping
+it yet. Add it once #0018's 2-char encoding lands.
+
+Registration order is explicit (`palette.go`'s own `init()` calls
+`Register(nesPreset())` then `Register(pico8Preset())`) rather than relying on
+Go's per-file init-order convention, since `Names()[0]` (NES) is what a new
+project defaults to per #0027.

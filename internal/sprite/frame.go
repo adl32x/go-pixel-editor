@@ -24,7 +24,9 @@ func framesDir(s Sprite) string {
 	return filepath.Join(filepath.Dir(s.Path), "frames")
 }
 
-// LoadFrames reads every frame of s, in filename order.
+// LoadFrames reads every frame of s, in filename order. It loads the
+// project's Settings itself (see settings.go) since parsing a frame
+// validates every pixel char against the current shared palette.
 func LoadFrames(s Sprite) ([]Frame, error) {
 	entries, err := os.ReadDir(framesDir(s))
 	if os.IsNotExist(err) {
@@ -43,9 +45,14 @@ func LoadFrames(s Sprite) ([]Frame, error) {
 	}
 	sort.Strings(names)
 
+	settings, err := LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+
 	frames := make([]Frame, 0, len(names))
 	for _, name := range names {
-		f, err := parseFrameFile(filepath.Join(framesDir(s), name), s)
+		f, err := parseFrameFile(filepath.Join(framesDir(s), name), s, settings)
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", name, err)
 		}
@@ -63,7 +70,11 @@ func FindFrame(s Sprite, id string) (*Frame, error) {
 		}
 		return nil, err
 	}
-	return parseFrameFile(path, s)
+	settings, err := LoadSettings()
+	if err != nil {
+		return nil, err
+	}
+	return parseFrameFile(path, s, settings)
 }
 
 // nextFrameID scans existing frames/*.px filenames for the highest numeric
@@ -99,7 +110,7 @@ func nextFrameID(s Sprite) (string, error) {
 // characters. Every character must be '.' or a known palette char — an
 // unrecognized character is treated as a corrupt file, not silently
 // ignored.
-func parseFrameFile(path string, s Sprite) (*Frame, error) {
+func parseFrameFile(path string, s Sprite, settings Settings) (*Frame, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -154,7 +165,7 @@ func parseFrameFile(path string, s Sprite) (*Frame, error) {
 			}
 			for c, ch := range row {
 				if ch != '.' {
-					if _, ok := s.CharToColor(ch); !ok {
+					if _, ok := settings.CharToColor(ch); !ok {
 						return nil, fmt.Errorf("frame %s layer %s row %d col %d: unknown palette char %q", id, layerID, r, c, ch)
 					}
 				}
@@ -180,11 +191,9 @@ func parseFrameFile(path string, s Sprite) (*Frame, error) {
 
 // Save serializes f into frames/<id>.px under s's directory, overwriting
 // whatever is there. Layers are written in s.Layers order (the sprite's
-// stack order) so every frame file has the same fixed shape.
-//
-// If f was built from data containing new colors (see FrameFromLayerProps),
-// s.Save() must be called first so the frame never references a palette
-// char that isn't yet recorded in sprite.md.
+// stack order) so every frame file has the same fixed shape. Since the
+// project's palette (settings.go) is fixed rather than append-only, there is
+// no longer any ordering requirement with saving sprite-level state first.
 func (f Frame) Save(s Sprite) error {
 	dir := framesDir(s)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

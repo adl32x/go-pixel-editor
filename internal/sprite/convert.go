@@ -20,8 +20,9 @@ type LayerProps struct {
 
 // ToLayerProps expands f's compact palette-indexed grid into dotting's
 // dense LayerProps/PixelModifyItem shape, one LayerProps per sprite layer in
-// s.Layers order.
-func (f Frame) ToLayerProps(s Sprite) ([]LayerProps, error) {
+// s.Layers order. settings resolves palette chars to colors — see
+// settings.go; the palette is project-wide, not per-sprite.
+func (f Frame) ToLayerProps(s Sprite, settings Settings) ([]LayerProps, error) {
 	out := make([]LayerProps, 0, len(s.Layers))
 	for _, ld := range s.Layers {
 		grid, ok := f.Layers[ld.ID]
@@ -34,7 +35,7 @@ func (f Frame) ToLayerProps(s Sprite) ([]LayerProps, error) {
 			for c := 0; c < s.Width; c++ {
 				item := PixelModifyItem{RowIndex: r, ColumnIndex: c}
 				if ch := grid[r][c]; ch != '.' {
-					color, ok := s.CharToColor(ch)
+					color, ok := settings.CharToColor(ch)
 					if !ok {
 						return nil, fmt.Errorf("frame %s: unknown palette char %q", f.ID, ch)
 					}
@@ -50,11 +51,11 @@ func (f Frame) ToLayerProps(s Sprite) ([]LayerProps, error) {
 }
 
 // FrameFromLayerProps converts a browser edit (dotting's LayerProps[]) back
-// into a compact Frame. It mutates s.Palette when it encounters a color
-// that hasn't been seen before — callers MUST call s.Save() before
-// Frame.Save() whenever that happens, so a crash never leaves a frame file
-// referencing a palette char that isn't yet recorded in sprite.md.
-func FrameFromLayerProps(s *Sprite, frameID string, layers []LayerProps) (Frame, error) {
+// into a compact Frame, resolving each drawn color to the nearest entry in
+// settings' fixed project palette (see Settings.ColorToChar) — unlike the
+// old per-sprite append-only scheme, this never mutates the palette, so
+// there's no ordering requirement with saving sprite-level state.
+func FrameFromLayerProps(s Sprite, frameID string, layers []LayerProps, settings Settings) (Frame, error) {
 	byID := make(map[string]LayerProps, len(layers))
 	for _, l := range layers {
 		byID[l.ID] = l
@@ -80,7 +81,7 @@ func FrameFromLayerProps(s *Sprite, frameID string, layers []LayerProps) (Frame,
 					gridRow[c] = '.'
 					continue
 				}
-				ch, err := s.ColorToChar(item.Color)
+				ch, err := settings.ColorToChar(item.Color)
 				if err != nil {
 					return Frame{}, err
 				}

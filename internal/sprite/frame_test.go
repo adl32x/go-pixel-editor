@@ -8,9 +8,10 @@ import (
 )
 
 // setupFourByFour creates the plan's literal worked example: a 4x4, 1-layer
-// sprite with a 2-color palette, and returns the sprite plus the exact
-// frame file content it should produce.
-func setupFourByFour(t *testing.T) (Sprite, string) {
+// sprite plus a project-wide 2-color Settings palette (black='0',
+// white='1'), and returns the sprite, settings, and the exact frame file
+// content it should produce.
+func setupFourByFour(t *testing.T) (Sprite, Settings, string) {
 	t.Helper()
 	t.Chdir(t.TempDir())
 
@@ -18,22 +19,23 @@ func setupFourByFour(t *testing.T) (Sprite, string) {
 	if err != nil {
 		t.Fatalf("NewSprite: %v", err)
 	}
-	if _, err := s.ColorToChar("#000000"); err != nil { // -> '0'
-		t.Fatalf("ColorToChar black: %v", err)
+	settings := Settings{
+		ActivePreset: "test",
+		Palette: []PaletteEntry{
+			{Char: "0", Color: "#000000"},
+			{Char: "1", Color: "#ffffff"},
+		},
 	}
-	if _, err := s.ColorToChar("#ffffff"); err != nil { // -> '1'
-		t.Fatalf("ColorToChar white: %v", err)
-	}
-	if err := s.Save(); err != nil {
-		t.Fatalf("Save: %v", err)
+	if err := settings.Save(); err != nil {
+		t.Fatalf("Settings.Save: %v", err)
 	}
 
 	want := "frame: f001\n\nlayer: L1\n....\n.10.\n.01.\n....\n\n"
-	return s, want
+	return s, settings, want
 }
 
 func TestFrameRoundTrip(t *testing.T) {
-	s, want := setupFourByFour(t)
+	s, _, want := setupFourByFour(t)
 
 	f := Frame{
 		ID: "f001",
@@ -75,7 +77,7 @@ func TestFrameRoundTrip(t *testing.T) {
 }
 
 func TestFrameParseRejectsUnknownChar(t *testing.T) {
-	s, _ := setupFourByFour(t)
+	s, _, _ := setupFourByFour(t)
 
 	bad := "frame: f001\n\nlayer: L1\n....\n.Z0.\n....\n....\n"
 	if err := os.WriteFile(filepath.Join(framesDir(s), "f001.px"), []byte(bad), 0o644); err != nil {
@@ -96,7 +98,7 @@ func TestFrameParseRejectsUnknownChar(t *testing.T) {
 // highest frame was when it's deleted, since no separate counter is kept
 // (deliberately — see sprite.md's "no next_id counters" design).
 func TestAddFrameIDNeverFillsAGap(t *testing.T) {
-	s, _ := setupFourByFour(t)
+	s, _, _ := setupFourByFour(t)
 
 	f1, err := AddFrame(s)
 	if err != nil {
@@ -136,7 +138,7 @@ func TestAddFrameIDNeverFillsAGap(t *testing.T) {
 }
 
 func TestDeleteFrameReferencedByClipRequiresForce(t *testing.T) {
-	s, _ := setupFourByFour(t)
+	s, _, _ := setupFourByFour(t)
 
 	f, err := AddFrame(s)
 	if err != nil {
@@ -167,7 +169,7 @@ func TestDeleteFrameReferencedByClipRequiresForce(t *testing.T) {
 }
 
 func TestClipInsertIsASingleLineDiff(t *testing.T) {
-	s, _ := setupFourByFour(t)
+	s, _, _ := setupFourByFour(t)
 
 	f1, _ := AddFrame(s)
 	f2, _ := AddFrame(s)
@@ -217,7 +219,7 @@ func TestClipInsertIsASingleLineDiff(t *testing.T) {
 }
 
 func TestToLayerPropsFromLayerPropsRoundTrip(t *testing.T) {
-	s, _ := setupFourByFour(t)
+	s, settings, _ := setupFourByFour(t)
 
 	orig := Frame{
 		ID: "f001",
@@ -231,7 +233,7 @@ func TestToLayerPropsFromLayerPropsRoundTrip(t *testing.T) {
 		},
 	}
 
-	layerProps, err := orig.ToLayerProps(s)
+	layerProps, err := orig.ToLayerProps(s, settings)
 	if err != nil {
 		t.Fatalf("ToLayerProps: %v", err)
 	}
@@ -248,7 +250,7 @@ func TestToLayerPropsFromLayerPropsRoundTrip(t *testing.T) {
 		t.Fatalf("pixel (0,0) color = %q, want empty (no pixel)", layerProps[0].Data[0][0].Color)
 	}
 
-	roundTripped, err := FrameFromLayerProps(&s, "f001", layerProps)
+	roundTripped, err := FrameFromLayerProps(s, "f001", layerProps, settings)
 	if err != nil {
 		t.Fatalf("FrameFromLayerProps: %v", err)
 	}

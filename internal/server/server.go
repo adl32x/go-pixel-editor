@@ -1,5 +1,5 @@
 // Package server implements `pixel serve`: a localhost HTTP API over the
-// sprites/ directory plus the embedded web/dist SPA (a React + dotting
+// .pixel/sprites/ directory plus the embedded web/dist SPA (a React + dotting
 // pixel canvas with a custom frame/timeline/playback layer).
 package server
 
@@ -16,14 +16,15 @@ import (
 	"strings"
 
 	"github.com/adl32x/go-pixel-editor/internal/export"
+	"github.com/adl32x/go-pixel-editor/internal/palette"
 	"github.com/adl32x/go-pixel-editor/internal/sprite"
 )
 
 // Run starts the server, blocking until it exits (or an error occurs).
-// args supports --port=NNNN (default 7777) and --no-open (skip launching
+// args supports --port=NNNN (default 7788) and --no-open (skip launching
 // the browser).
 func Run(args []string) error {
-	port := "7777"
+	port := "7788"
 	open := true
 	for _, a := range args {
 		switch {
@@ -54,6 +55,11 @@ func Run(args []string) error {
 	mux.HandleFunc("GET /api/sprites/{id}/export.png", handleExportPNG)
 	mux.HandleFunc("GET /api/sprites/{id}/export", handleExport)
 	mux.HandleFunc("GET /api/export-formats", handleExportFormats)
+
+	mux.HandleFunc("GET /api/palette", handleGetPalette)
+	mux.HandleFunc("PUT /api/palette", handlePutPalette)
+	mux.HandleFunc("GET /api/palette-presets", handleListPalettePresets)
+	mux.HandleFunc("GET /api/palette-presets/{id}", handleGetPalettePreset)
 
 	mux.Handle("/", staticHandler())
 
@@ -205,7 +211,12 @@ func handleGetFrame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, fmt.Errorf("no frame %s", r.PathValue("frameId")))
 		return
 	}
-	layers, err := f.ToLayerProps(*s)
+	settings, err := sprite.LoadSettings()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	layers, err := f.ToLayerProps(*s, settings)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -223,17 +234,15 @@ func handlePutFrame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	frameID := r.PathValue("frameId")
-	f, err := sprite.FrameFromLayerProps(s, frameID, layers)
+	settings, err := sprite.LoadSettings()
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	// Sprite.Save() must run first: FrameFromLayerProps may have allocated
-	// new palette chars, and a frame file must never reference a char that
-	// isn't yet recorded in sprite.md.
-	if err := s.Save(); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+	frameID := r.PathValue("frameId")
+	f, err := sprite.FrameFromLayerProps(*s, frameID, layers, settings)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := f.Save(*s); err != nil {
@@ -352,7 +361,12 @@ func handleExportPNG(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	png, err := export.FramePNG(*s, frame)
+	settings, err := sprite.LoadSettings()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	png, err := export.FramePNG(*s, frame, settings)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -395,7 +409,12 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	bundle, err := format.Export(*s, frames, clip)
+	settings, err := sprite.LoadSettings()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	bundle, err := format.Export(*s, frames, clip, settings)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -421,6 +440,89 @@ func handleExportFormats(w http.ResponseWriter, r *http.Request) {
 		out[i] = exportFormatInfo{Name: n}
 	}
 	writeJSON(w, out)
+}
+
+// handleGetPalette returns the project's single active palette (see
+// internal/sprite's Settings) — every sprite's frames index into this same
+// list, there is no more per-sprite palette.
+func handleGetPalette(w http.ResponseWriter, r *http.Request) {
+	settings, err := sprite.LoadSettings()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, settings)
+}
+
+type putPaletteRequest struct {
+	// PresetID, if set, switches to a built-in preset's colors wholesale.
+	PresetID string `json:"presetId,omitempty"`
+	// Colors, if set (and PresetID isn't), is a fully custom ordered color
+	// list — a manual edit that doesn't match any named preset.
+	Colors []string `json:"colors,omitempty"`
+}
+
+// handlePutPalette changes the project's active palette — the only
+// supported way to do so, since it must remap every existing sprite's
+// pixels to the new palette (see sprite.RemapPalette); there is
+// deliberately no endpoint that just overwrites Settings.Palette directly.
+func handlePutPalette(w http.ResponseWriter, r *http.Request) {
+	var req putPaletteRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	activePreset := req.PresetID
+	colors := req.Colors
+	if req.PresetID != "" {
+		p, ok := palette.Get(req.PresetID)
+		if !ok {
+			writeError(w, http.StatusNotFound, fmt.Errorf("no palette preset %q", req.PresetID))
+			return
+		}
+		colors = p.Colors
+	} else if len(colors) > 0 {
+		activePreset = "custom"
+	} else {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("request must set presetId or colors"))
+		return
+	}
+
+	settings, err := sprite.RemapPalette(activePreset, colors)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, settings)
+}
+
+type paletteMetaInfo struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	ColorCount int    `json:"colorCount"`
+}
+
+// handleListPalettePresets lists the built-in presets a project's palette
+// can be set to (#0025's settings page picks from these) — just id/name/
+// count, not the full color lists, to keep the listing light.
+func handleListPalettePresets(w http.ResponseWriter, r *http.Request) {
+	presets := palette.List()
+	out := make([]paletteMetaInfo, len(presets))
+	for i, p := range presets {
+		out[i] = paletteMetaInfo{ID: p.ID, Name: p.Name, ColorCount: len(p.Colors)}
+	}
+	writeJSON(w, out)
+}
+
+// handleGetPalettePreset returns one preset's full color list.
+func handleGetPalettePreset(w http.ResponseWriter, r *http.Request) {
+	p, ok := palette.Get(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Errorf("no palette preset %q", r.PathValue("id")))
+		return
+	}
+	writeJSON(w, p)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
