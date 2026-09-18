@@ -5,6 +5,7 @@ import DottingCanvas, {
   type DottingCanvasHandle,
 } from "./canvas/DottingCanvas";
 import LayerPanel from "./layers/LayerPanel";
+import Toolbar from "./canvas/Toolbar";
 import PaletteBar from "./palette/PaletteBar";
 import PaletteSettings from "./settings/PaletteSettings";
 import ClipEditor from "./sprites/ClipEditor";
@@ -27,6 +28,7 @@ export default function App() {
   const [frameId, setFrameId] = useState<string | null>(null);
   const [clipName, setClipName] = useState<string | null>(null);
   const [brushColor, setBrushColor] = useState("#000000");
+  const [brushTool, setBrushTool] = useState<BrushTool>(BrushTool.DOT);
   // Which layer new strokes land on — persists across frame switches within
   // the same sprite (the layer set doesn't change when you switch frames),
   // reset to the topmost layer whenever a different sprite is opened.
@@ -240,7 +242,12 @@ export default function App() {
           <PaletteSettings settings={settings} onSettingsChanged={handleSettingsChanged} />
         ) : sprite ? (
           <>
-            <SpriteMeta sprite={sprite} onSave={handleSaveMeta} />
+            {/* SpriteMeta's name/tags fields are local useState seeded once
+                from props — without a key forcing a remount on sprite
+                switch, they'd keep showing the *previous* sprite's values
+                until the user manually edits them, risking a save that
+                silently renames the wrong sprite. */}
+            <SpriteMeta key={sprite.id} sprite={sprite} onSave={handleSaveMeta} />
 
             <div className="app-workspace">
               <PaletteBar
@@ -248,6 +255,8 @@ export default function App() {
                 brushColor={brushColor}
                 onSelectColor={setBrushColor}
               />
+
+              <Toolbar tool={brushTool} onSelectTool={setBrushTool} />
 
               {initLayers.length > 0 ? (
                 <DottingCanvas
@@ -265,7 +274,7 @@ export default function App() {
                   key={sprite.id + ":" + sprite.layers.map((l) => l.id).join(",")}
                   ref={canvasRef}
                   initLayers={initLayers}
-                  brushTool={BrushTool.DOT}
+                  brushTool={brushTool}
                   brushColor={brushColor}
                   activeLayerId={activeLayerId}
                   onChange={handleCanvasChange}

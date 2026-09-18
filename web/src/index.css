@@ -283,6 +283,27 @@ a {
   outline-offset: 1px;
 }
 
+.toolbar {
+  width: 100px;
+}
+
+.toolbar-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toolbar-button {
+  width: 100%;
+  text-align: left;
+}
+
+.toolbar-button.selected {
+  background: var(--mac-accent);
+  border-color: var(--mac-accent);
+  color: #fff;
+}
+
 .layer-panel {
   width: 220px;
 }
