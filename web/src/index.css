@@ -323,6 +323,18 @@ a {
   background: rgba(0, 122, 255, 0.08);
 }
 
+.layer-visibility {
+  padding: 2px 4px;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.layer-visibility.hidden {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
 .layer-name {
   flex: 1;
   min-width: 0;
@@ -352,6 +364,28 @@ a {
 .layer-create input {
   flex: 1;
   min-width: 0;
+}
+
+.preview-panel {
+  width: 160px;
+}
+
+.preview-panel-image {
+  width: 128px;
+  height: 128px;
+}
+
+.preview-panel-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.preview-panel-hint {
+  color: var(--mac-text-secondary);
+  font-size: 11px;
+  margin: 8px 0 0;
 }
 
 .timeline-strip {

@@ -7,6 +7,7 @@ import {
   type LayerProps,
   type PixelModifyItem,
 } from "dotting";
+import type { LayerDef } from "../types";
 
 export interface DottingCanvasHandle {
   loadLayers: (layers: LayerProps[]) => void;
@@ -24,6 +25,16 @@ interface DottingCanvasProps {
   // LayerPanel for that) — this prop drives dotting's setCurrentLayer ref
   // method imperatively, the same way loadLayers drives setLayers.
   activeLayerId: string;
+  // Sprite-level layer metadata (visibility, in particular) — dotting's own
+  // LayerProps only carries {id, data}, with no visibility flag, so this is
+  // a separate prop rather than folded into initLayers. Drives dotting's
+  // showLayer/hideLayer ref methods the same imperative way activeLayerId
+  // drives setCurrentLayer, since dotting has no reactive prop for this
+  // either. Note there is no equivalent for `opacity` — dotting has no
+  // opacity concept at all (confirmed: zero references anywhere in its
+  // source), so it can only ever be applied to flattened output (exports,
+  // the preview thumbnail), never previewed live on this canvas.
+  layers: LayerDef[];
   onChange: (layers: LayerProps[]) => void;
 }
 
@@ -58,7 +69,7 @@ function denseGridFromDottingData(
 // `initLayers` updating reactively (it is only read on mount).
 const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
   function DottingCanvas(
-    { width = 512, height = 512, initLayers, brushTool, brushColor, activeLayerId, onChange },
+    { width = 512, height = 512, initLayers, brushTool, brushColor, activeLayerId, layers, onChange },
     outerRef,
   ) {
     const dottingRef = useRef<DottingRef>(null);
@@ -74,6 +85,14 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
     // whether anything else re-rendered the parent within 400ms.
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
+
+    // Latest activeLayerId/layers (metadata) props, for loadLayers() below
+    // to read without becoming stale — see onChangeRef above for why a
+    // plain-assignment ref, not a dependency, is the right tool here.
+    const activeLayerIdRef = useRef(activeLayerId);
+    activeLayerIdRef.current = activeLayerId;
+    const layersPropRef = useRef(layers);
+    layersPropRef.current = layers;
 
     // The current data for every layer, keyed by layer id. Seeded from
     // initLayers (the frame this canvas was mounted for — remember,
@@ -121,6 +140,21 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
       }));
     }
 
+    // Pushes visibility (from sprite metadata, not dotting's own state) into
+    // dotting for every layer it currently knows about. Shared by the
+    // reactive effect below and by loadLayers()'s post-setLayers fixup —
+    // see the comment there for why the latter needs it too.
+    function applyLayerVisibility(layerDefs: LayerDef[]) {
+      for (const l of layerDefs) {
+        if (!layerIdsRef.current.includes(l.id)) continue;
+        if (l.visible) {
+          dottingRef.current?.showLayer(l.id);
+        } else {
+          dottingRef.current?.hideLayer(l.id);
+        }
+      }
+    }
+
     useImperativeHandle(
       outerRef,
       () => ({
@@ -128,6 +162,24 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
           layerIdsRef.current = layers.map((l) => l.id);
           layersRef.current = new Map(layers.map((l) => [l.id, l.data]));
           dottingRef.current?.setLayers(layers);
+          // dotting's setLayers() constructs brand-new internal layer
+          // objects from the given {id, data} pairs alone — no visibility
+          // flag exists on LayerProps to preserve, so every layer silently
+          // resets to visible, and separately resets dotting's own
+          // "current layer" to whichever id is first in the array,
+          // regardless of what's actually selected. Both are real, live
+          // bugs otherwise: switch frames with a layer hidden, and it
+          // reappears; switch frames with a non-topmost layer active, and
+          // new strokes silently start landing on the topmost layer
+          // instead. Our own effects for both don't re-fire here because
+          // neither activeLayerId nor the layers metadata prop necessarily
+          // changed — a frame switch changes pixel *data*, not layer
+          // *settings* — so this reset has to be undone right where it
+          // happens instead.
+          applyLayerVisibility(layersPropRef.current);
+          if (layerIdsRef.current.includes(activeLayerIdRef.current)) {
+            dottingRef.current?.setCurrentLayer(activeLayerIdRef.current);
+          }
         },
         getLayers(): LayerProps[] {
           return currentLayersArray();
@@ -153,6 +205,19 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
       if (!layerIdsRef.current.includes(activeLayerId)) return;
       dottingRef.current?.setCurrentLayer(activeLayerId);
     }, [activeLayerId]);
+
+    // Sync each layer's visibility into dotting via showLayer/hideLayer —
+    // the LayerPanel checkbox previously only ever patched sprite metadata
+    // server-side (used correctly by the export/thumbnail compositor) and
+    // never told the live canvas anything, so toggling it visibly did
+    // nothing. dotting has no reactive prop for this (LayerProps carries
+    // only {id, data}), hence another imperative-ref effect. Guarded the
+    // same way as setCurrentLayer above: dotting's showLayer/hideLayer
+    // throw synchronously ("Layer not found") for an id its own dataLayer
+    // doesn't have yet, which a layer add/delete in flight could trigger.
+    useEffect(() => {
+      applyLayerVisibility(layers);
+    }, [layers]);
 
     useEffect(() => {
       const ref = dottingRef.current;

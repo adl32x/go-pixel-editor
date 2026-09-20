@@ -50,16 +50,18 @@ export default function LayerPanel({
             className={"layer-row" + (layer.id === activeLayerId ? " selected" : "")}
             onClick={() => onSelectLayer(layer.id)}
           >
-            <input
-              type="checkbox"
-              checked={layer.visible}
-              onChange={(e) => {
+            <button
+              type="button"
+              className={"layer-visibility" + (layer.visible ? "" : " hidden")}
+              onClick={(e) => {
                 e.stopPropagation();
-                update(layer.id, { visible: e.target.checked });
+                update(layer.id, { visible: !layer.visible });
               }}
-              onClick={(e) => e.stopPropagation()}
-              title="visible"
-            />
+              aria-pressed={layer.visible}
+              title={layer.visible ? "visible — click to hide" : "hidden — click to show"}
+            >
+              {layer.visible ? "👁️" : "🚫"}
+            </button>
             <input
               className="layer-name"
               value={layer.name}

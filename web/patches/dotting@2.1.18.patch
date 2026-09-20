@@ -1,0 +1,40 @@
+diff --git a/build/index.esm.js b/build/index.esm.js
+index b065686b0b600845835321b24dc83cca77d44c6f..b9129b4686560823f58b91d1c3344c258df3157b 100644
+--- a/build/index.esm.js
++++ b/build/index.esm.js
+@@ -4949,7 +4949,14 @@ class Editor extends EventDispatcher {
+         if (this.lastRenderAllCall) {
+             cancelAnimationFrame(this.lastRenderAllCall);
+         }
+-        this.lastRenderAllCall = requestAnimationFrame(this.renderAll);
++        // PATCHED (see /web/node_modules/dotting/patches — go-pixel-editor
++        // ticket #0033): this was `requestAnimationFrame(this.renderAll)`, a
++        // bare unbound method reference. requestAnimationFrame invokes its
++        // callback with no receiver, so `this` was undefined inside
++        // renderAll on every single call to setLayers (i.e. every frame
++        // switch), throwing "Cannot read properties of undefined (reading
++        // 'interactionLayer')" one animation frame later, unconditionally.
++        this.lastRenderAllCall = requestAnimationFrame(() => this.renderAll());
+     }
+     convertWorldPosToCanvasOffset(worldPos) {
+         const convertedLeftTopScreenPoint = convertCartesianToScreen(this.element, worldPos, this.dpr);
+diff --git a/build/index.js b/build/index.js
+index f2d5197160b65bd98aeeb63b293838d79bcd1952..0c4129549d85ce3430e30f599bb08249ee8c0b7e 100644
+--- a/build/index.js
++++ b/build/index.js
+@@ -4957,7 +4957,14 @@ class Editor extends EventDispatcher {
+         if (this.lastRenderAllCall) {
+             cancelAnimationFrame(this.lastRenderAllCall);
+         }
+-        this.lastRenderAllCall = requestAnimationFrame(this.renderAll);
++        // PATCHED (see /web/node_modules/dotting/patches — go-pixel-editor
++        // ticket #0033): this was `requestAnimationFrame(this.renderAll)`, a
++        // bare unbound method reference. requestAnimationFrame invokes its
++        // callback with no receiver, so `this` was undefined inside
++        // renderAll on every single call to setLayers (i.e. every frame
++        // switch), throwing "Cannot read properties of undefined (reading
++        // 'interactionLayer')" one animation frame later, unconditionally.
++        this.lastRenderAllCall = requestAnimationFrame(() => this.renderAll());
+     }
+     convertWorldPosToCanvasOffset(worldPos) {
+         const convertedLeftTopScreenPoint = convertCartesianToScreen(this.element, worldPos, this.dpr);

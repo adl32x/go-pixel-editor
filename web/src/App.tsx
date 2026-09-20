@@ -5,6 +5,7 @@ import DottingCanvas, {
   type DottingCanvasHandle,
 } from "./canvas/DottingCanvas";
 import LayerPanel from "./layers/LayerPanel";
+import PreviewPanel from "./canvas/PreviewPanel";
 import Toolbar from "./canvas/Toolbar";
 import PaletteBar from "./palette/PaletteBar";
 import PaletteSettings from "./settings/PaletteSettings";
@@ -37,6 +38,15 @@ export default function App() {
   // The project's single shared palette — every sprite draws from this same
   // list (see internal/sprite Settings), fetched once rather than per-sprite.
   const [settings, setSettings] = useState<Settings | null>(null);
+  // Bumped after anything that changes what the flattened preview (and
+  // export) would look like — a pixel edit, or a layer's visibility/
+  // opacity/order changing — so <PreviewPanel> can cache-bust the
+  // otherwise-identical export.png URL. dotting has no opacity support and
+  // (until just now) wasn't even told about visibility, so this preview is
+  // the only place those two settings are actually visible live; see
+  // PreviewPanel.tsx and DottingCanvas's `layers` prop.
+  const [previewVersion, setPreviewVersion] = useState(0);
+  const bumpPreview = useCallback(() => setPreviewVersion((v) => v + 1), []);
   const canvasRef = useRef<DottingCanvasHandle>(null);
 
   const refreshSprites = useCallback(async () => {
@@ -119,8 +129,9 @@ export default function App() {
     async (layers: LayerProps[]) => {
       if (!spriteId || !frameId) return;
       await api.putFrame(spriteId, frameId, layers);
+      bumpPreview();
     },
-    [spriteId, frameId],
+    [spriteId, frameId, bumpPreview],
   );
 
   async function handleFramesChanged() {
@@ -143,6 +154,7 @@ export default function App() {
     if (!spriteId) return;
     await api.patchSprite(spriteId, { layers });
     await refreshSprite(spriteId);
+    bumpPreview();
   }
 
   // Re-fetches the active frame and pushes it into the already-mounted
@@ -166,6 +178,7 @@ export default function App() {
   async function handleSettingsChanged(updated: Settings) {
     setSettings(updated);
     await reloadActiveFrame();
+    bumpPreview();
   }
 
   // Adding a layer retrofits a blank block onto every frame server-side
@@ -192,6 +205,7 @@ export default function App() {
     setSprite(updated);
     setInitLayers(layers);
     setActiveLayerId(updated.layers[0]?.id ?? "");
+    bumpPreview();
   }
 
   async function handleDeleteLayer(layerId: string) {
@@ -203,6 +217,7 @@ export default function App() {
     if (activeLayerId === layerId) {
       setActiveLayerId(updated.layers[0]?.id ?? "");
     }
+    bumpPreview();
   }
 
   const clip = sprite?.clips.find((c) => c.name === clipName) ?? null;
@@ -277,6 +292,7 @@ export default function App() {
                   brushTool={brushTool}
                   brushColor={brushColor}
                   activeLayerId={activeLayerId}
+                  layers={sprite.layers}
                   onChange={handleCanvasChange}
                 />
               ) : (
@@ -293,6 +309,14 @@ export default function App() {
                 onAddLayer={handleAddLayer}
                 onDeleteLayer={handleDeleteLayer}
               />
+
+              {frameId && (
+                <PreviewPanel
+                  spriteId={sprite.id}
+                  frameId={frameId}
+                  version={previewVersion}
+                />
+              )}
             </div>
 
             <Timeline

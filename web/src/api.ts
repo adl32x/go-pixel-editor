@@ -157,8 +157,14 @@ export function exportUrl(spriteId: string, format: string, clip?: string): stri
   return `${BASE}/sprites/${spriteId}/export?${params.toString()}`;
 }
 
-export function exportFramePngUrl(spriteId: string, frameId: string): string {
+// `version` is a pure cache-buster: the backend ignores it, but changing it
+// changes the URL, which is what actually forces the browser to re-fetch an
+// <img> whose spriteId/frameId haven't changed even though the flattened
+// pixels underneath have (a draw, a layer's visibility/opacity, a palette
+// remap) — see App's previewVersion / PreviewPanel.
+export function exportFramePngUrl(spriteId: string, frameId: string, version?: number): string {
   const params = new URLSearchParams({ frame: frameId });
+  if (version !== undefined) params.set("v", String(version));
   return `${BASE}/sprites/${spriteId}/export.png?${params.toString()}`;
 }
 
