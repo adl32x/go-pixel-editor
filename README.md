@@ -12,7 +12,7 @@ them impossible to diff or merge in git. `pixel` stores every sprite as a
 small set of plain-text files instead, under a `.pixel/` dot-folder (kept out
 of your repo root, same reason `.github/` or `.vscode/` exist — still fully
 git-tracked, plain text, meant to be committed): one `sprite.md` per sprite
-(metadata: canvas size, layer stack, animation clips) and one small
+(metadata: canvas size, layer stack, animation rows) and one small
 palette-indexed text file per frame. Editing one pixel changes one line.
 Inserting a frame in the middle of a walk cycle adds one file and one line —
 nothing else moves.
@@ -37,7 +37,7 @@ make build        # builds the web UI (Bun) and the pixel binary
 pixel                          List every sprite (default)
 pixel new <name>                 --width= --height= --tags=
 pixel show <id>                Print one sprite's sprite.md in full
-pixel export <id>                --clip= --format=gif|sheet-json --out=
+pixel export <id>                --animation= --format=gif|sheet-json --out=
 pixel serve                      --port= --no-open
 pixel version / help
 ```
@@ -49,7 +49,7 @@ pixel version / help
   settings.md           # the project's one shared palette
   sprites/
     0001-hero/
-      sprite.md          # frontmatter + ## layers / ## clips
+      sprite.md          # frontmatter + ## layers / ## animations
       frames/
         f001.px           # one row per canvas row, one char per pixel
         f002.px

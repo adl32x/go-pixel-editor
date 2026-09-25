@@ -1,6 +1,5 @@
 import type {
-  Clip,
-  ClipPatch,
+  AnimationPatch,
   ExportFormat,
   LayerProps,
   PalettePresetInfo,
@@ -63,8 +62,13 @@ export function deleteSprite(id: string): Promise<void> {
 
 // -- frames --------------------------------------------------------------
 
-export function addFrame(spriteId: string): Promise<{ frameId: string }> {
-  return request(`/sprites/${spriteId}/frames`, { method: "POST" });
+// Appends a new blank frame to the end of the given animation row (the last
+// row when omitted).
+export function addFrame(spriteId: string, animation?: string): Promise<{ frameId: string }> {
+  return request(`/sprites/${spriteId}/frames`, {
+    method: "POST",
+    body: JSON.stringify({ animation: animation ?? "" }),
+  });
 }
 
 export function getFrame(spriteId: string, frameId: string): Promise<LayerProps[]> {
@@ -82,15 +86,8 @@ export function putFrame(
   });
 }
 
-export function deleteFrame(
-  spriteId: string,
-  frameId: string,
-  force = false,
-): Promise<void> {
-  const qs = force ? "?force=true" : "";
-  return request(`/sprites/${spriteId}/frames/${frameId}${qs}`, {
-    method: "DELETE",
-  });
+export function deleteFrame(spriteId: string, frameId: string): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/frames/${frameId}`, { method: "DELETE" });
 }
 
 // -- layers ----------------------------------------------------------------
@@ -112,35 +109,30 @@ export function deleteLayer(spriteId: string, layerId: string): Promise<Sprite> 
   });
 }
 
-// -- clips ---------------------------------------------------------------
+// -- animations ------------------------------------------------------------
+// The rows of the frame grid. Each call returns the updated sprite.
 
-export function listClips(spriteId: string): Promise<Clip[]> {
-  return request(`/sprites/${spriteId}/clips`);
-}
-
-export function createClip(
-  spriteId: string,
-  input: { name: string; loop: string; fps: number },
-): Promise<Clip> {
-  return request(`/sprites/${spriteId}/clips`, {
+export function createAnimation(spriteId: string, name: string): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/animations`, {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify({ name }),
   });
 }
 
-export function patchClip(
+export function patchAnimation(
   spriteId: string,
   name: string,
-  patch: ClipPatch,
-): Promise<Clip> {
-  return request(`/sprites/${spriteId}/clips/${encodeURIComponent(name)}`, {
+  patch: AnimationPatch,
+): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/animations/${encodeURIComponent(name)}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
 }
 
-export function deleteClip(spriteId: string, name: string): Promise<void> {
-  return request(`/sprites/${spriteId}/clips/${encodeURIComponent(name)}`, {
+// Deletes the row *and every frame in it*.
+export function deleteAnimation(spriteId: string, name: string): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/animations/${encodeURIComponent(name)}`, {
     method: "DELETE",
   });
 }
@@ -151,9 +143,9 @@ export function getExportFormats(): Promise<ExportFormat[]> {
   return request("/export-formats");
 }
 
-export function exportUrl(spriteId: string, format: string, clip?: string): string {
+export function exportUrl(spriteId: string, format: string, animation?: string): string {
   const params = new URLSearchParams({ format });
-  if (clip) params.set("clip", clip);
+  if (animation) params.set("animation", animation);
   return `${BASE}/sprites/${spriteId}/export?${params.toString()}`;
 }
 

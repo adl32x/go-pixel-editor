@@ -1,11 +1,11 @@
 // Package sprite implements a plain-text, git-friendly pixel-art sprite
 // format: one directory per sprite under .pixel/sprites/, with sprite
-// metadata (canvas size, layer stack, animation clips) in a hand-parsed
+// metadata (canvas size, layer stack, animation rows) in a hand-parsed
 // sprite.md frontmatter+sections file, and each frame as its own small
 // palette-indexed text file under frames/. See settings.go for the
 // project's single shared palette (every sprite's frames index into it, not
-// a per-sprite palette), frame.go for the frame codec, and clip.go for the
-// animation-clip block format.
+// a per-sprite palette), frame.go for the frame codec, and animation.go for
+// the animation-row block format.
 //
 // Everything lives under a top-level .pixel/ dot-folder to keep a project's
 // repo root clean — this is still fully git-tracked, plain-text, diffable
@@ -54,9 +54,12 @@ type Sprite struct {
 	Tags    []string  `json:"tags"`
 	Created time.Time `json:"created"`
 	Updated time.Time `json:"updated"`
+	// DurationMS is how long each frame is held during playback unless the
+	// frame overrides it (see AnimFrame.DurationMS).
+	DurationMS int `json:"durationMs"`
 
-	Layers []LayerDef `json:"layers"`
-	Clips  []Clip     `json:"clips"`
+	Layers     []LayerDef  `json:"layers"`
+	Animations []Animation `json:"animations"`
 
 	Path string `json:"-"`
 }
@@ -82,13 +85,13 @@ type LayerDef struct {
 
 // Summary is the compact shape returned by the sprite list endpoint.
 type Summary struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	Width      int      `json:"width"`
-	Height     int      `json:"height"`
-	Tags       []string `json:"tags"`
-	FrameCount int      `json:"frameCount"`
-	ClipNames  []string `json:"clipNames"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Width          int      `json:"width"`
+	Height         int      `json:"height"`
+	Tags           []string `json:"tags"`
+	FrameCount     int      `json:"frameCount"`
+	AnimationNames []string `json:"animationNames"`
 }
 
 // Summary computes the list-view summary for s, which requires counting
@@ -98,13 +101,13 @@ func (s Sprite) Summary() (Summary, error) {
 	if err != nil {
 		return Summary{}, err
 	}
-	names := make([]string, len(s.Clips))
-	for i, c := range s.Clips {
-		names[i] = c.Name
+	names := make([]string, len(s.Animations))
+	for i, a := range s.Animations {
+		names[i] = a.Name
 	}
 	return Summary{
 		ID: s.ID, Name: s.Name, Width: s.Width, Height: s.Height,
-		Tags: s.Tags, FrameCount: len(frames), ClipNames: names,
+		Tags: s.Tags, FrameCount: len(frames), AnimationNames: names,
 	}, nil
 }
 
@@ -206,7 +209,8 @@ func splitTags(tags string) []string {
 
 // parseSpriteFile reads and parses one sprite.md file: a frontmatter block
 // (same hand-rolled key:value scanner as go-backlog-cli's ticket.go) followed
-// by "## layers" / "## clips" sections.
+// by "## layers" / "## animations" sections. Rows are then normalized
+// against the frame files on disk (see normalizeAnimations).
 func parseSpriteFile(path string) (*Sprite, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -249,36 +253,50 @@ func parseSpriteFile(path string) (*Sprite, error) {
 
 	width, _ := strconv.Atoi(fields["width"])
 	height, _ := strconv.Atoi(fields["height"])
+	duration, err := strconv.Atoi(fields["duration"])
+	if err != nil || duration <= 0 {
+		duration = DefaultFrameDurationMS
+	}
 	created, _ := time.Parse(time.RFC3339, fields["created"])
 	updated, _ := time.Parse(time.RFC3339, fields["updated"])
 
 	s := &Sprite{
-		ID:      fields["id"],
-		Name:    fields["name"],
-		Width:   width,
-		Height:  height,
-		Tags:    splitTags(fields["tags"]),
-		Created: created,
-		Updated: updated,
-		Path:    path,
-		Layers:  []LayerDef{},
-		Clips:   []Clip{},
+		ID:         fields["id"],
+		Name:       fields["name"],
+		Width:      width,
+		Height:     height,
+		Tags:       splitTags(fields["tags"]),
+		Created:    created,
+		Updated:    updated,
+		DurationMS: duration,
+		Path:       path,
+		Layers:     []LayerDef{},
+		Animations: []Animation{},
 	}
 
 	if err := parseSections(rest, s); err != nil {
 		return nil, err
 	}
+	onDisk, err := frameIDsOnDisk(*s)
+	if err != nil {
+		return nil, err
+	}
+	normalizeAnimations(s, onDisk)
 	return s, nil
 }
 
 // parseSections walks the lines after the frontmatter block, dispatching
-// into the "## layers" and "## clips" sections. Section and
-// clip headers must be unindented; frame-entry lines inside a clip's
-// "frames:" list must be indented — that distinction is how the scanner
-// tells a section boundary from a list item.
+// into the "## layers" and "## animations" sections. Section and row
+// headers must be unindented; frame-entry lines inside a row's "frames:"
+// list must be indented — that distinction is how the scanner tells a
+// section boundary from a list item.
+//
+// A legacy "## clips" section is read as "## animations": its per-clip
+// "loop:"/"fps:" scalars are ignored, and any frame shared between clips
+// ends up in the first one only (see normalizeAnimations).
 func parseSections(lines []string, s *Sprite) error {
 	section := ""
-	var clip *Clip
+	var anim *Animation
 	inFramesList := false
 
 	for _, raw := range lines {
@@ -290,14 +308,17 @@ func parseSections(lines []string, s *Sprite) error {
 
 		if !indented && strings.HasPrefix(trimmed, "## ") {
 			section = strings.TrimPrefix(trimmed, "## ")
-			clip = nil
+			if section == "clips" {
+				section = "animations"
+			}
+			anim = nil
 			inFramesList = false
 			continue
 		}
-		if section == "clips" && !indented && strings.HasPrefix(trimmed, "### ") {
+		if section == "animations" && !indented && strings.HasPrefix(trimmed, "### ") {
 			name := strings.TrimPrefix(trimmed, "### ")
-			s.Clips = append(s.Clips, Clip{Name: name, Loop: LoopForward, FPS: 12, Entries: []ClipEntry{}})
-			clip = &s.Clips[len(s.Clips)-1]
+			s.Animations = append(s.Animations, Animation{Name: name, Frames: []AnimFrame{}})
+			anim = &s.Animations[len(s.Animations)-1]
 			inFramesList = false
 			continue
 		}
@@ -307,27 +328,22 @@ func parseSections(lines []string, s *Sprite) error {
 			if err := parseLayerLine(s, trimmed); err != nil {
 				return err
 			}
-		case "clips":
-			if clip == nil {
-				return fmt.Errorf("clip content outside a ### block: %q", trimmed)
+		case "animations":
+			if anim == nil {
+				return fmt.Errorf("animation content outside a ### block: %q", trimmed)
 			}
 			if indented {
 				if !inFramesList {
-					return fmt.Errorf("clip %s: frame entry outside frames: list: %q", clip.Name, trimmed)
+					return fmt.Errorf("animation %s: frame entry outside frames: list: %q", anim.Name, trimmed)
 				}
-				if err := parseClipEntryLine(clip, trimmed); err != nil {
+				if err := parseAnimFrameLine(anim, trimmed); err != nil {
 					return err
 				}
 				continue
 			}
-			if trimmed == "frames:" {
-				inFramesList = true
-				continue
-			}
-			inFramesList = false
-			if err := parseClipScalarLine(clip, trimmed); err != nil {
-				return err
-			}
+			// Anything else unindented (legacy "loop:"/"fps:") ends the list
+			// and is otherwise ignored.
+			inFramesList = trimmed == "frames:"
 		}
 	}
 	return nil
@@ -357,10 +373,10 @@ func parseLayerLine(s *Sprite, line string) error {
 	return nil
 }
 
-// Save serializes the sprite's frontmatter + palette/layers/clips sections
+// Save serializes the sprite's frontmatter + layers/animations sections
 // back to s.Path, overwriting whatever is there. It is the single source of
 // truth for the on-disk sprite.md format — every mutation (creation, patch,
-// frame/clip commands that touch sprite-level state) goes through it rather
+// frame/animation commands that touch sprite-level state) goes through it rather
 // than hand-patching lines.
 func (s Sprite) Save() error {
 	dir := filepath.Dir(s.Path)
@@ -378,6 +394,7 @@ func (s Sprite) Save() error {
 	fmt.Fprintf(&b, "width: %d\n", s.Width)
 	fmt.Fprintf(&b, "height: %d\n", s.Height)
 	fmt.Fprintf(&b, "tags: %s\n", strings.Join(s.Tags, ", "))
+	fmt.Fprintf(&b, "duration: %d\n", s.DurationMS)
 	fmt.Fprintf(&b, "created: %s\n", s.Created.UTC().Format(time.RFC3339))
 	fmt.Fprintf(&b, "updated: %s\n", s.Updated.UTC().Format(time.RFC3339))
 	fmt.Fprintln(&b, "---")
@@ -390,9 +407,9 @@ func (s Sprite) Save() error {
 		}
 	}
 
-	if len(s.Clips) > 0 {
+	if len(s.Animations) > 0 {
 		fmt.Fprintln(&b)
-		formatClipsSection(&b, s.Clips)
+		formatAnimationsSection(&b, s.Animations)
 	}
 
 	return writeFileAtomic(s.Path, []byte(b.String()), 0o644)

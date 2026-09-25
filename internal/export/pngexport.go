@@ -9,7 +9,7 @@ import (
 
 // FramePNG flattens a single frame's visible layers into a PNG — used by
 // the quick-preview /export.png endpoint, distinct from the pluggable
-// Format registry above (which always operates on a whole clip/sprite).
+// Format registry above (which always operates on a whole animation/sprite).
 func FramePNG(s sprite.Sprite, f sprite.Frame, settings sprite.Settings) ([]byte, error) {
 	img, err := compositeFrame(s, f, settings)
 	if err != nil {

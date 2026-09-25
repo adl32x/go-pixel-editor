@@ -9,12 +9,9 @@ import PreviewPanel from "./canvas/PreviewPanel";
 import Toolbar from "./canvas/Toolbar";
 import PaletteBar from "./palette/PaletteBar";
 import PaletteSettings from "./settings/PaletteSettings";
-import ClipEditor from "./sprites/ClipEditor";
 import SpriteList from "./sprites/SpriteList";
 import SpriteMeta from "./sprites/SpriteMeta";
-import PlaybackControls from "./timeline/PlaybackControls";
-import Timeline from "./timeline/Timeline";
-import { spriteStore } from "./state/spriteStore";
+import FrameGrid from "./timeline/FrameGrid";
 import type { LayerProps, Settings, Sprite, SpriteSummary } from "./types";
 
 const EMPTY_LAYERS: LayerProps[] = [];
@@ -27,7 +24,9 @@ export default function App() {
   const [spriteId, setSpriteId] = useState<string | null>(null);
   const [sprite, setSprite] = useState<Sprite | null>(null);
   const [frameId, setFrameId] = useState<string | null>(null);
-  const [clipName, setClipName] = useState<string | null>(null);
+  // The frame grid row the preview plays — follows the selected frame's
+  // row, or whichever row header was clicked last.
+  const [animationName, setAnimationName] = useState<string | null>(null);
   const [brushColor, setBrushColor] = useState("#000000");
   const [brushTool, setBrushTool] = useState<BrushTool>(BrushTool.DOT);
   // Which layer new strokes land on — persists across frame switches within
@@ -75,6 +74,13 @@ export default function App() {
     canvasRef.current?.loadLayers(layers);
   }, [spriteId]);
 
+  // Keep the selected frame's row selected too, whichever way the frame got
+  // selected (click, add, or a fallback after a delete).
+  useEffect(() => {
+    const row = sprite?.animations.find((a) => a.frames.some((f) => f.frameId === frameId));
+    if (row) setAnimationName(row.name);
+  }, [sprite, frameId]);
+
   // Loads a newly-selected sprite. This intentionally does NOT go through
   // selectFrame()'s imperative canvasRef.loadLayers() call: a different
   // sprite can have a different grid size and layer set than whatever
@@ -97,19 +103,12 @@ export default function App() {
         layers = await api.getFrame(spriteId, firstFrameId);
       }
       setSprite(s);
-      setClipName(s.clips[0]?.name ?? null);
+      setAnimationName(s.animations[0]?.name ?? null);
       setFrameId(firstFrameId);
       setInitLayers(layers);
       setActiveLayerId(s.layers[0]?.id ?? "");
     })();
   }, [spriteId]);
-
-  useEffect(() => {
-    const clip = sprite?.clips.find((c) => c.name === clipName);
-    if (clip) {
-      spriteStore.setPlayback({ fps: clip.fps, loop: clip.loop, entryIndex: 0, playing: false });
-    }
-  }, [sprite, clipName]);
 
   async function handleCreateSprite(input: { name: string; width: number; height: number }) {
     const created = await api.createSprite(input);
@@ -134,14 +133,33 @@ export default function App() {
     [spriteId, frameId, bumpPreview],
   );
 
-  async function handleFramesChanged() {
-    if (!spriteId) return;
-    await refreshSprite(spriteId);
+  // Applies a sprite returned by a frame-grid mutation. If the selected
+  // frame was deleted (alone or with its whole row), falls back to the first
+  // frame of the selected row, then of the sprite — or to the "no frames"
+  // state, which unmounts the canvas.
+  async function handleGridSpriteChanged(updated: Sprite) {
+    setSprite(updated);
+    refreshSprites();
+    if (frameId && updated.frameIds.includes(frameId)) return;
+    const row = updated.animations.find((a) => a.name === animationName);
+    const fallback = row?.frames[0]?.frameId ?? updated.frameIds[0];
+    if (fallback) {
+      await selectFrame(fallback);
+    } else {
+      setFrameId(null);
+      setInitLayers(EMPTY_LAYERS);
+      if (!row) setAnimationName(updated.animations[0]?.name ?? null);
+    }
   }
 
-  async function handleClipsChanged() {
-    if (!spriteId) return;
-    await refreshSprite(spriteId);
+  // Clicking a row header selects that row for the preview, and jumps the
+  // canvas to its first frame if the current frame is in a different row.
+  function handleSelectAnimation(name: string) {
+    setAnimationName(name);
+    const row = sprite?.animations.find((a) => a.name === name);
+    if (row && row.frames.length > 0 && !row.frames.some((f) => f.frameId === frameId)) {
+      selectFrame(row.frames[0].frameId);
+    }
   }
 
   async function handleSaveMeta(patch: { name?: string; tags?: string[] }) {
@@ -220,7 +238,7 @@ export default function App() {
     bumpPreview();
   }
 
-  const clip = sprite?.clips.find((c) => c.name === clipName) ?? null;
+  const animation = sprite?.animations.find((a) => a.name === animationName) ?? null;
 
   return (
     <div className="app">
@@ -297,7 +315,7 @@ export default function App() {
                 />
               ) : (
                 <p className="app-no-frames">
-                  This sprite has no frames yet — add one from the timeline below.
+                  This sprite has no frames yet — add one from the frame grid below.
                 </p>
               )}
 
@@ -310,34 +328,25 @@ export default function App() {
                 onDeleteLayer={handleDeleteLayer}
               />
 
-              {frameId && (
-                <PreviewPanel
-                  spriteId={sprite.id}
-                  frameId={frameId}
-                  version={previewVersion}
-                />
-              )}
+              <PreviewPanel
+                // Restart playback from the row's first frame on a row switch.
+                key={sprite.id + "/" + (animation?.name ?? "")}
+                spriteId={sprite.id}
+                animation={animation}
+                defaultDurationMs={sprite.durationMs}
+                selectedFrameId={frameId}
+                version={previewVersion}
+              />
             </div>
 
-            <Timeline
-              spriteId={sprite.id}
-              width={sprite.width}
-              height={sprite.height}
-              frameIds={sprite.frameIds}
+            <FrameGrid
+              sprite={sprite}
               selectedFrameId={frameId}
+              selectedAnimation={animationName}
+              version={previewVersion}
               onSelectFrame={selectFrame}
-              onFramesChanged={handleFramesChanged}
-            />
-
-            <PlaybackControls clip={clip} onFrame={selectFrame} />
-
-            <ClipEditor
-              spriteId={sprite.id}
-              clips={sprite.clips}
-              selectedClipName={clipName}
-              selectedFrameId={frameId}
-              onSelectClip={setClipName}
-              onClipsChanged={handleClipsChanged}
+              onSelectAnimation={handleSelectAnimation}
+              onSpriteChanged={handleGridSpriteChanged}
             />
           </>
         ) : (

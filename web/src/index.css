@@ -97,9 +97,7 @@ ul, ol {
 
 .app-workspace,
 .sprite-meta,
-.timeline,
-.playback-controls,
-.clip-editor {
+.frame-grid {
   background: var(--mac-panel-bg);
   border: 1px solid var(--mac-border);
   border-radius: var(--mac-radius-panel);
@@ -166,9 +164,9 @@ a {
   color: var(--mac-accent);
 }
 
-/* -- selectable list rows (sprites, clips, frames) -------------------- */
+/* -- selectable list rows (sprites, frames) --------------------------- */
 
-.sprite-list-item, .clip-item, .timeline-frame {
+.sprite-list-item, .frame-grid-frame {
   display: block;
   width: 100%;
   text-align: left;
@@ -181,24 +179,18 @@ a {
   box-shadow: none;
 }
 
-.sprite-list-item:hover, .clip-item:hover, .timeline-frame:hover {
+.sprite-list-item:hover, .frame-grid-frame:hover {
   background: rgba(0, 0, 0, 0.05);
 }
 
-.sprite-list-item.selected, .clip-item.selected, .timeline-frame.selected {
+.sprite-list-item.selected, .frame-grid-cell.selected .frame-grid-frame {
   background: var(--mac-accent);
   border-color: var(--mac-accent);
   color: #fff;
 }
 
-.sprite-list-item.selected:hover, .clip-item.selected:hover, .timeline-frame.selected:hover {
+.sprite-list-item.selected:hover, .frame-grid-cell.selected .frame-grid-frame:hover {
   background: var(--mac-accent-hover);
-}
-
-.clip-create {
-  display: flex;
-  gap: 6px;
-  margin-top: 10px;
 }
 
 .sprite-create {
@@ -370,12 +362,31 @@ a {
   width: 160px;
 }
 
+.preview-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.preview-panel-header h3 {
+  margin: 0;
+}
+
+.preview-panel-toggle {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
 .preview-panel-image {
+  position: relative;
   width: 128px;
   height: 128px;
 }
 
 .preview-panel-image img {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
@@ -388,31 +399,123 @@ a {
   margin: 8px 0 0;
 }
 
-.timeline-strip {
+/* -- frame grid: one row per animation -------------------------------- */
+
+.frame-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.frame-grid-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.frame-grid-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mac-text-secondary);
+}
+
+.frame-grid-toolbar .duration-input {
+  width: 72px;
+}
+
+.frame-grid-spacer {
+  flex: 1;
+}
+
+.frame-grid-error {
+  margin: 0;
+  color: #d70015;
+}
+
+.frame-grid-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.frame-grid-row {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  padding: 8px;
+  border: 1px solid var(--mac-border);
+  border-radius: var(--mac-radius-control);
+}
+
+.frame-grid-row.selected {
+  border-color: var(--mac-accent);
+  background: rgba(0, 122, 255, 0.05);
+}
+
+.frame-grid-row-header {
+  width: 150px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.frame-grid-row-name {
+  width: 100%;
+  font-weight: 600;
+}
+
+.frame-grid-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.frame-grid-row-actions button {
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.frame-grid-cells {
+  flex: 1;
+  min-width: 0;
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding: 6px 6px 2px 0;
 }
 
-.timeline-frame {
+.frame-grid-cell {
   position: relative;
-  width: 64px;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
-.timeline-frame-label {
+.frame-grid-frame {
+  width: 64px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.frame-grid-frame-label {
   display: block;
   font-size: 10px;
   text-align: center;
   color: var(--mac-text-secondary);
 }
 
-.timeline-frame.selected .timeline-frame-label {
+.frame-grid-cell.selected .frame-grid-frame-label {
   color: rgba(255, 255, 255, 0.85);
 }
 
-.timeline-frame-delete {
+.frame-grid-frame-delete {
   position: absolute;
   top: -6px;
   right: -6px;
@@ -424,13 +527,60 @@ a {
   text-align: center;
   line-height: 16px;
   font-size: 11px;
+  cursor: pointer;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  opacity: 0;
 }
 
-.timeline-add {
+.frame-grid-cell:hover .frame-grid-frame-delete,
+.frame-grid-cell.selected .frame-grid-frame-delete {
+  opacity: 1;
+}
+
+.frame-grid-cell-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.frame-grid-cell-controls button {
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 18px;
+  visibility: hidden;
+}
+
+.frame-grid-cell:hover .frame-grid-cell-controls button,
+.frame-grid-cell.selected .frame-grid-cell-controls button {
+  visibility: visible;
+}
+
+.frame-grid-cell-controls .duration-input {
+  width: 44px;
+  padding: 1px 3px;
+  font-size: 10px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.duration-input::-webkit-inner-spin-button,
+.duration-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.frame-grid-add-frame {
   width: 64px;
   flex-shrink: 0;
-  align-self: stretch;
+  height: 72px;
+  font-size: 18px;
+  color: var(--mac-text-secondary);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.frame-grid-add-row {
+  align-self: flex-start;
 }
 
 .frame-thumbnail {
@@ -447,70 +597,6 @@ a {
     linear-gradient(-45deg, transparent 75%, var(--checker-dark) 75%);
   background-size: 8px 8px;
   background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
-}
-
-.playback-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.playback-controls-empty {
-  color: var(--mac-text-secondary);
-  font-style: italic;
-}
-
-.playback-controls input[type="range"] {
-  flex: 1;
-}
-
-.playback-controls label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--mac-text-secondary);
-}
-
-.clip-editor {
-  max-width: 480px;
-}
-
-.clip-list {
-  margin-bottom: 4px;
-}
-
-.clip-detail {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--mac-border);
-}
-
-.clip-detail-header {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.clip-detail-header label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--mac-text-secondary);
-}
-
-.clip-entries li {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.clip-export {
-  margin-top: 12px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
 }
 
 .palette-settings {

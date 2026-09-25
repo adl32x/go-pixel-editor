@@ -77,6 +77,26 @@ func FindFrame(s Sprite, id string) (*Frame, error) {
 	return parseFrameFile(path, s, settings)
 }
 
+// frameIDsOnDisk lists s's frame ids from frames/*.px filenames alone,
+// without parsing the files — cheap enough to run on every sprite load.
+func frameIDsOnDisk(s Sprite) ([]string, error) {
+	entries, err := os.ReadDir(framesDir(s))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".px") {
+			ids = append(ids, strings.TrimSuffix(e.Name(), ".px"))
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
+}
+
 // nextFrameID scans existing frames/*.px filenames for the highest numeric
 // suffix and returns max+1. IDs are never reused, even after a delete.
 func nextFrameID(s Sprite) (string, error) {

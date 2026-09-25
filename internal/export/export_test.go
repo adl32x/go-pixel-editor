@@ -1,6 +1,8 @@
 package export
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/adl32x/go-pixel-editor/internal/sprite"
@@ -21,7 +23,7 @@ func testSprite(t *testing.T) (sprite.Sprite, []sprite.Frame, sprite.Settings) {
 	}
 	var frames []sprite.Frame
 	for i := 0; i < 2; i++ {
-		f, err := sprite.AddFrame(s)
+		f, err := sprite.AddFrame(&s, "")
 		if err != nil {
 			t.Fatalf("AddFrame: %v", err)
 		}
@@ -40,12 +42,11 @@ func testSprite(t *testing.T) (sprite.Sprite, []sprite.Frame, sprite.Settings) {
 		frames = append(frames, nf)
 	}
 
-	if _, err := sprite.NewClip(&s, "blink", sprite.LoopForward, 4); err != nil {
-		t.Fatalf("NewClip: %v", err)
+	if _, err := sprite.AddAnimation(&s, "blink"); err != nil {
+		t.Fatalf("AddAnimation: %v", err)
 	}
-	entries := []sprite.ClipEntry{{FrameID: frames[0].ID}, {FrameID: frames[1].ID}}
-	if _, err := sprite.UpdateClip(&s, "blink", sprite.ClipPatch{Entries: &entries}); err != nil {
-		t.Fatalf("UpdateClip: %v", err)
+	if _, err := sprite.AddFrame(&s, "blink"); err != nil {
+		t.Fatalf("AddFrame: %v", err)
 	}
 
 	reloaded, err := sprite.Find(s.ID)
@@ -61,7 +62,7 @@ func TestGIFExport(t *testing.T) {
 	if !ok {
 		t.Fatal("gif format not registered")
 	}
-	bundle, err := f.Export(s, frames, &s.Clips[0], settings)
+	bundle, err := f.Export(s, frames, &s.Animations[0], settings)
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}
@@ -83,7 +84,7 @@ func TestSheetJSONExport(t *testing.T) {
 	if !ok {
 		t.Fatal("sheet-json format not registered")
 	}
-	bundle, err := f.Export(s, frames, &s.Clips[0], settings)
+	bundle, err := f.Export(s, frames, &s.Animations[0], settings)
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}
@@ -102,5 +103,35 @@ func TestSheetJSONExport(t *testing.T) {
 	}
 	if len(data) < 4 || string(data[:2]) != "PK" {
 		t.Fatalf("output doesn't look like a zip: %q...", data[:min(len(data), 16)])
+	}
+}
+
+func TestSheetJSONTagsEveryRowInGridOrder(t *testing.T) {
+	s, frames, settings := testSprite(t)
+	all, err := sprite.LoadFrames(s)
+	if err != nil {
+		t.Fatalf("LoadFrames: %v", err)
+	}
+	if len(all) != len(frames)+1 {
+		t.Fatalf("frames on disk = %d, want %d", len(all), len(frames)+1)
+	}
+	f, _ := Get("sheet-json")
+	bundle, err := f.Export(s, all, nil, settings)
+	if err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	var data sheetDataJSON
+	if err := json.Unmarshal(bundle.Files["data.json"], &data); err != nil {
+		t.Fatalf("data.json: %v", err)
+	}
+	want := []frameTagJSON{
+		{Name: "default", From: 0, To: 1, Direction: "forward"},
+		{Name: "blink", From: 2, To: 2, Direction: "forward"},
+	}
+	if !reflect.DeepEqual(data.Meta.FrameTags, want) {
+		t.Fatalf("frameTags = %+v, want %+v", data.Meta.FrameTags, want)
+	}
+	if d := data.Frames["f001"].Duration; d != sprite.DefaultFrameDurationMS {
+		t.Fatalf("f001 duration = %d, want sprite default %d", d, sprite.DefaultFrameDurationMS)
 	}
 }

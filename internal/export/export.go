@@ -65,12 +65,12 @@ func (b Bundle) Payload() ([]byte, string, error) {
 }
 
 // Format is one exportable output — a query-param/CLI-flag value (Name)
-// plus the logic to render a sprite (optionally scoped to one clip) into a
+// plus the logic to render a sprite (optionally scoped to one animation row) into a
 // Bundle. settings resolves palette chars to colors (the project's single
 // shared palette — see internal/sprite's settings.go).
 type Format interface {
 	Name() string
-	Export(s sprite.Sprite, frames []sprite.Frame, clip *sprite.Clip, settings sprite.Settings) (Bundle, error)
+	Export(s sprite.Sprite, frames []sprite.Frame, anim *sprite.Animation, settings sprite.Settings) (Bundle, error)
 }
 
 var registry = map[string]Format{}
@@ -92,6 +92,36 @@ func Names() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// sequence returns the frames to export, in playback order, each paired
+// with its hold duration: anim's frames when set, otherwise every animation
+// row of s back to back (grid order).
+func sequence(s sprite.Sprite, frames []sprite.Frame, anim *sprite.Animation) ([]step, error) {
+	rows := s.Animations
+	if anim != nil {
+		rows = []sprite.Animation{*anim}
+	}
+	byID := make(map[string]sprite.Frame, len(frames))
+	for _, f := range frames {
+		byID[f.ID] = f
+	}
+	var steps []step
+	for _, a := range rows {
+		for _, af := range a.Frames {
+			f, ok := byID[af.FrameID]
+			if !ok {
+				return nil, fmt.Errorf("animation %q references unknown frame %s", a.Name, af.FrameID)
+			}
+			steps = append(steps, step{frame: f, durationMS: int(s.FrameDuration(af).Milliseconds())})
+		}
+	}
+	return steps, nil
+}
+
+type step struct {
+	frame      sprite.Frame
+	durationMS int
 }
 
 func init() {

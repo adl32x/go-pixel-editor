@@ -9,11 +9,11 @@ import "testing"
 // become the topmost (first) layer.
 func TestAddLayerRetrofitsExistingFrames(t *testing.T) {
 	s, _, _ := setupFourByFour(t)
-	f1, err := AddFrame(s)
+	f1, err := AddFrame(&s, "")
 	if err != nil {
 		t.Fatalf("AddFrame: %v", err)
 	}
-	f2, err := AddFrame(s)
+	f2, err := AddFrame(&s, "")
 	if err != nil {
 		t.Fatalf("AddFrame #2: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestAddLayerRetrofitsExistingFrames(t *testing.T) {
 // resurrect stale pixel data) without disturbing the other layer's data.
 func TestDeleteLayerStripsFrameBlocks(t *testing.T) {
 	s, _, _ := setupFourByFour(t)
-	f, err := AddFrame(s)
+	f, err := AddFrame(&s, "")
 	if err != nil {
 		t.Fatalf("AddFrame: %v", err)
 	}

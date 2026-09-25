@@ -30,7 +30,7 @@ func TestRemapPaletteRewritesExistingFrames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSprite: %v", err)
 	}
-	f, err := AddFrame(s)
+	f, err := AddFrame(&s, "")
 	if err != nil {
 		t.Fatalf("AddFrame: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestRemapPaletteLeavesUntouchedFramesAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSprite: %v", err)
 	}
-	f, err := AddFrame(s)
+	f, err := AddFrame(&s, "")
 	if err != nil {
 		t.Fatalf("AddFrame: %v", err)
 	}

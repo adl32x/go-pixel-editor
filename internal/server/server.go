@@ -50,10 +50,9 @@ func Run(args []string) error {
 	mux.HandleFunc("POST /api/sprites/{id}/layers", handleAddLayer)
 	mux.HandleFunc("DELETE /api/sprites/{id}/layers/{layerId}", handleDeleteLayer)
 
-	mux.HandleFunc("GET /api/sprites/{id}/clips", handleListClips)
-	mux.HandleFunc("POST /api/sprites/{id}/clips", handleCreateClip)
-	mux.HandleFunc("PATCH /api/sprites/{id}/clips/{name}", handlePatchClip)
-	mux.HandleFunc("DELETE /api/sprites/{id}/clips/{name}", handleDeleteClip)
+	mux.HandleFunc("POST /api/sprites/{id}/animations", handleCreateAnimation)
+	mux.HandleFunc("PATCH /api/sprites/{id}/animations/{name}", handlePatchAnimation)
+	mux.HandleFunc("DELETE /api/sprites/{id}/animations/{name}", handleDeleteAnimation)
 
 	mux.HandleFunc("GET /api/sprites/{id}/export.png", handleExportPNG)
 	mux.HandleFunc("GET /api/sprites/{id}/export", handleExport)
@@ -74,35 +73,21 @@ func Run(args []string) error {
 	return http.ListenAndServe(":"+port, mux)
 }
 
-// spriteResponse adds the frame id list to a Sprite for the HTTP layer.
-// Frame existence has no manifest in sprite.md (see internal/sprite's
-// design doc comment) — it's computed at read time by scanning frames/*.px,
-// same as Sprite.Summary does for FrameCount, so the frontend's timeline
-// knows which frames to fetch without a separate list-frames round trip.
+// spriteResponse adds a flat, grid-ordered frame id list to a Sprite for
+// the HTTP layer. Every frame file belongs to exactly one animation row
+// (normalized on load, see internal/sprite's normalizeAnimations), so this
+// is just the rows flattened.
 type spriteResponse struct {
 	sprite.Sprite
 	FrameIDs []string `json:"frameIds"`
 }
 
-func toSpriteResponse(s sprite.Sprite) (spriteResponse, error) {
-	frames, err := sprite.LoadFrames(s)
-	if err != nil {
-		return spriteResponse{}, err
-	}
-	ids := make([]string, len(frames))
-	for i, f := range frames {
-		ids[i] = f.ID
-	}
-	return spriteResponse{Sprite: s, FrameIDs: ids}, nil
-}
-
 func writeSprite(w http.ResponseWriter, s sprite.Sprite) {
-	resp, err := toSpriteResponse(s)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
+	ids := s.OrderedFrameIDs()
+	if ids == nil {
+		ids = []string{}
 	}
-	writeJSON(w, resp)
+	writeJSON(w, spriteResponse{Sprite: s, FrameIDs: ids})
 }
 
 func findSprite(w http.ResponseWriter, id string) *sprite.Sprite {
@@ -187,14 +172,26 @@ func handleDeleteSprite(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type addFrameRequest struct {
+	// Animation is the row to append the new frame to ("" = last row).
+	Animation string `json:"animation"`
+}
+
 func handleAddFrame(w http.ResponseWriter, r *http.Request) {
 	s := findSprite(w, r.PathValue("id"))
 	if s == nil {
 		return
 	}
-	f, err := sprite.AddFrame(*s)
+	var req addFrameRequest
+	if r.ContentLength != 0 {
+		if err := decodeJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+	}
+	f, err := sprite.AddFrame(s, req.Animation)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	writeJSON(w, map[string]string{"frameId": f.ID})
@@ -260,12 +257,11 @@ func handleDeleteFrame(w http.ResponseWriter, r *http.Request) {
 	if s == nil {
 		return
 	}
-	force := r.URL.Query().Get("force") == "true"
-	if err := sprite.DeleteFrame(s, r.PathValue("frameId"), force); err != nil {
-		writeError(w, http.StatusConflict, err)
+	if err := sprite.DeleteFrame(s, r.PathValue("frameId")); err != nil {
+		writeError(w, http.StatusNotFound, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeSprite(w, *s)
 }
 
 type addLayerRequest struct {
@@ -307,71 +303,58 @@ func handleDeleteLayer(w http.ResponseWriter, r *http.Request) {
 	writeSprite(w, *s)
 }
 
-func handleListClips(w http.ResponseWriter, r *http.Request) {
+type animationRequest struct {
+	Name string `json:"name"`
+}
+
+// handleCreateAnimation appends a new, empty animation row.
+func handleCreateAnimation(w http.ResponseWriter, r *http.Request) {
 	s := findSprite(w, r.PathValue("id"))
 	if s == nil {
 		return
 	}
-	writeJSON(w, s.Clips)
-}
-
-type createClipRequest struct {
-	Name string  `json:"name"`
-	Loop string  `json:"loop"`
-	FPS  float64 `json:"fps"`
-}
-
-func handleCreateClip(w http.ResponseWriter, r *http.Request) {
-	s := findSprite(w, r.PathValue("id"))
-	if s == nil {
-		return
-	}
-	var req createClipRequest
+	var req animationRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	loop, err := sprite.ParseLoopMode(req.Loop)
-	if err != nil {
+	if _, err := sprite.AddAnimation(s, req.Name); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	c, err := sprite.NewClip(s, req.Name, loop, req.FPS)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	writeJSON(w, c)
+	writeSprite(w, *s)
 }
 
-func handlePatchClip(w http.ResponseWriter, r *http.Request) {
+// handlePatchAnimation renames a row and/or reorders its frames / changes
+// their duration overrides (see sprite.AnimationPatch).
+func handlePatchAnimation(w http.ResponseWriter, r *http.Request) {
 	s := findSprite(w, r.PathValue("id"))
 	if s == nil {
 		return
 	}
-	var patch sprite.ClipPatch
+	var patch sprite.AnimationPatch
 	if err := decodeJSON(r, &patch); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	c, err := sprite.UpdateClip(s, r.PathValue("name"), patch)
-	if err != nil {
+	if _, err := sprite.UpdateAnimation(s, r.PathValue("name"), patch); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	writeJSON(w, c)
+	writeSprite(w, *s)
 }
 
-func handleDeleteClip(w http.ResponseWriter, r *http.Request) {
+// handleDeleteAnimation removes a row along with every frame in it.
+func handleDeleteAnimation(w http.ResponseWriter, r *http.Request) {
 	s := findSprite(w, r.PathValue("id"))
 	if s == nil {
 		return
 	}
-	if err := sprite.DeleteClip(s, r.PathValue("name")); err != nil {
+	if err := sprite.DeleteAnimation(s, r.PathValue("name")); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeSprite(w, *s)
 }
 
 func handleExportPNG(w http.ResponseWriter, r *http.Request) {
@@ -432,18 +415,14 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var clip *sprite.Clip
-	if name := r.URL.Query().Get("clip"); name != "" {
-		for i := range s.Clips {
-			if s.Clips[i].Name == name {
-				clip = &s.Clips[i]
-				break
-			}
-		}
-		if clip == nil {
-			writeError(w, http.StatusNotFound, fmt.Errorf("no clip named %q", name))
+	var anim *sprite.Animation
+	if name := r.URL.Query().Get("animation"); name != "" {
+		i := s.FindAnimation(name)
+		if i < 0 {
+			writeError(w, http.StatusNotFound, fmt.Errorf("no animation named %q", name))
 			return
 		}
+		anim = &s.Animations[i]
 	}
 
 	frames, err := sprite.LoadFrames(*s)
@@ -456,7 +435,7 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	bundle, err := format.Export(*s, frames, clip, settings)
+	bundle, err := format.Export(*s, frames, anim, settings)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return

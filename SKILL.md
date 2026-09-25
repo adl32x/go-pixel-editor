@@ -51,7 +51,7 @@ updated: 2026-09-17T09:00:00Z
   remaps every sprite's existing pixels to the nearest color in the new list.
 
 `sprite.md` — frontmatter (same hand-rolled `key: value` scanner as
-go-backlog-cli's tickets, no YAML lib) plus `## layers` / `## clips`
+go-backlog-cli's tickets, no YAML lib) plus `## layers` / `## animations`
 sections:
 
 ```markdown
@@ -61,6 +61,7 @@ name: Eye
 width: 4
 height: 4
 tags: ui, eye
+duration: 100
 created: 2026-09-17T09:00:00Z
 updated: 2026-09-17T09:00:00Z
 ---
@@ -68,22 +69,25 @@ updated: 2026-09-17T09:00:00Z
 ## layers
 L1 base visible=true opacity=1
 
-## clips
+## animations
 ### blink
-loop: forward
-fps: 2
 frames:
   f001
-  f002
+  f002 @250
 ```
 
 - `## layers`: one line per layer, stack order (first line = topmost):
   `<id> <name> visible=<bool> opacity=<float>`.
-- `## clips`: repeated `### <name>` blocks. `loop:` is `none`, `forward`, or
-  `pingpong`; `fps:` is the default frame rate; `frames:` is followed by
-  **one frame id per line** (never a single space-separated line — that's
-  what keeps inserting a frame a clean single-line `git diff`), optionally
-  `  f008 @250` to override that entry's duration in milliseconds.
+- `duration:` is the sprite-wide default hold time per frame, in ms.
+- `## animations`: the rows of the frame grid, as repeated `### <name>`
+  blocks. `frames:` is followed by **one frame id per line** (never a single
+  space-separated line — that's what keeps inserting a frame a clean
+  single-line `git diff`), optionally `  f008 @250` to override that frame's
+  duration in milliseconds. Every frame file belongs to **exactly one** row:
+  on load, references to missing frames and repeats are dropped and any
+  frame no row mentions is appended to the first row. Deleting a row deletes
+  its frames. A legacy `## clips` section (with `loop:`/`fps:`) is still read,
+  as animations, and rewritten as `## animations` on the next save.
 
 `frames/fNNN.px` — one line per canvas row, one character per pixel, `.`
 meaning "no pixel", resolved through the project's shared palette:
@@ -109,7 +113,7 @@ never renumbered — they're derived by scanning existing files/lines for
 pixel                            # list every sprite
 pixel new "<name>" --width= --height= --tags=
 pixel show <id>                  # print one sprite's sprite.md in full
-pixel export <id> --clip= --format=gif|sheet-json --out=
+pixel export <id> --animation= --format=gif|sheet-json --out=
 pixel serve --port= --no-open    # browser-based canvas/timeline editor (default port 7788)
 pixel version / help
 ```
@@ -121,11 +125,13 @@ to avoid colliding with go-backlog-cli's `backlog serve` default) and opens a
 browser tab with two views, switched via a sidebar nav:
 
 - **Sprites** (default): a [dotting](https://github.com/hunkim98/dotting)-based
-  pixel canvas plus a custom frame timeline and playback controls (dotting
-  itself has no notion of frames/animation — only static layers — so the
-  timeline, playback loop, and clip model are this project's own code, built
-  on top of dotting's per-frame canvas). Create a sprite, draw pixels, add
-  frames, group frames into a named clip with an fps/loop mode, and export.
+  pixel canvas plus a custom frame grid (dotting itself has no notion of
+  frames/animation — only static layers — so the grid, playback, and
+  animation model are this project's own code, built on top of dotting's
+  per-frame canvas). The grid has one row per named animation; each row's
+  frames play left to right. The preview panel loops the selected row
+  (using the flattened export render, so layer visibility/opacity apply).
+  Frames hold for the sprite's default duration unless overridden per frame.
 - **Settings**: the project's palette editor. Pick a built-in preset or edit
   individual colors (add/remove/reorder), then apply — this remaps every
   sprite's existing pixels to the nearest matching color in the new palette
@@ -137,12 +143,11 @@ browser tab with two views, switched via a sidebar nav:
 Export format is chosen per-request, not fixed in code — `internal/export`
 is a small registry of `Format` implementations:
 
-- `gif` — a single animated GIF (loop mode maps to the GIF's Netscape loop
-  extension; `pingpong` clips are expanded into an explicit forward+reverse
-  frame sequence since GIF itself can't bounce).
+- `gif` — a single looping animated GIF of one animation row, or of every
+  row back to back.
 - `sheet-json` (default) — `sheet.png` (a horizontal sprite sheet) +
   `data.json` in an Aseprite-compatible schema (frame rects/durations,
-  `frameTags` for clips) — importable by common engines (e.g. Phaser's
+  `frameTags` with one tag per animation row) — importable by common engines (e.g. Phaser's
   `load.aseprite`) without a bespoke schema.
 
 Adding a new target format is a new `export.Format` implementation plus a
@@ -162,10 +167,12 @@ changes needed.
   the nearest color in the new palette before saving the new `Settings`.
 - `internal/sprite/frame.go` — `Frame` struct, the `.px` row codec,
   `LoadFrames`/`FindFrame`/`Frame.Save`.
-- `internal/sprite/clip.go` — `Clip`/`ClipEntry`/`LoopMode`, the `## clips`
-  block parse/format.
+- `internal/sprite/animation.go` — `Animation`/`AnimFrame`, frame duration
+  resolution, the one-row-per-frame normalization, and the `## animations`
+  block format.
 - `internal/sprite/commands.go` — `NewSprite`, `Reslug`, `AddFrame`,
-  `DeleteFrame`, `NewClip`, `UpdateClip`, patch types.
+  `DeleteFrame`, `AddAnimation`, `UpdateAnimation`, `DeleteAnimation`, patch
+  types.
 - `internal/sprite/convert.go` — `LayerProps`/`PixelModifyItem` (dotting's
   exact JSON shape) ⇄ `Frame` conversion.
 - `internal/palette/` — the built-in preset registry (`nes.go`, `pico8.go`),

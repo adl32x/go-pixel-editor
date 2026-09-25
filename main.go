@@ -67,7 +67,7 @@ Commands:
     --tags=a,b,c                  (default: none)
   show <id>                     Print one sprite's sprite.md in full
   export <id>                   Export a sprite
-    --clip=<name>                  (default: all frames, in file order)
+    --animation=<name>             (default: every animation row, in order)
     --format=gif|sheet-json        (default: sheet-json)
     --out=<path>                   (default: .pixel/sprites/<id>-<slug>/export.<ext>)
   serve                          Open the browser-based canvas/timeline editor
@@ -91,8 +91,8 @@ func runList() error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("%s  %-20s %3dx%-3d  %2d frame(s)  %2d clip(s)  %s\n",
-			sum.ID, sum.Name, sum.Width, sum.Height, sum.FrameCount, len(sum.ClipNames), strings.Join(sum.Tags, ","))
+		fmt.Printf("%s  %-20s %3dx%-3d  %2d frame(s)  %2d animation(s)  %s\n",
+			sum.ID, sum.Name, sum.Width, sum.Height, sum.FrameCount, len(sum.AnimationNames), strings.Join(sum.Tags, ","))
 	}
 	return nil
 }
@@ -144,16 +144,16 @@ func runShow(args []string) error {
 
 func runExport(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: pixel export <id> [--clip=] [--format=] [--out=]")
+		return fmt.Errorf("usage: pixel export <id> [--animation=] [--format=] [--out=]")
 	}
 	id := args[0]
-	formatName, clipName, out := "sheet-json", "", ""
+	formatName, animName, out := "sheet-json", "", ""
 	for _, a := range args[1:] {
 		switch {
 		case strings.HasPrefix(a, "--format="):
 			formatName = strings.TrimPrefix(a, "--format=")
-		case strings.HasPrefix(a, "--clip="):
-			clipName = strings.TrimPrefix(a, "--clip=")
+		case strings.HasPrefix(a, "--animation="):
+			animName = strings.TrimPrefix(a, "--animation=")
 		case strings.HasPrefix(a, "--out="):
 			out = strings.TrimPrefix(a, "--out=")
 		}
@@ -172,17 +172,13 @@ func runExport(args []string) error {
 		return fmt.Errorf("unknown export format %q (available: %s)", formatName, strings.Join(export.Names(), ", "))
 	}
 
-	var clip *sprite.Clip
-	if clipName != "" {
-		for i := range s.Clips {
-			if s.Clips[i].Name == clipName {
-				clip = &s.Clips[i]
-				break
-			}
+	var anim *sprite.Animation
+	if animName != "" {
+		i := s.FindAnimation(animName)
+		if i < 0 {
+			return fmt.Errorf("no animation named %q", animName)
 		}
-		if clip == nil {
-			return fmt.Errorf("no clip named %q", clipName)
-		}
+		anim = &s.Animations[i]
 	}
 
 	frames, err := sprite.LoadFrames(*s)
@@ -193,7 +189,7 @@ func runExport(args []string) error {
 	if err != nil {
 		return err
 	}
-	bundle, err := format.Export(*s, frames, clip, settings)
+	bundle, err := format.Export(*s, frames, anim, settings)
 	if err != nil {
 		return err
 	}

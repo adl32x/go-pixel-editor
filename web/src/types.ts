@@ -24,18 +24,17 @@ export interface LayerDef {
   opacity: number;
 }
 
-export type LoopMode = "none" | "forward" | "pingpong";
-
-export interface ClipEntry {
+// One cell of an animation row. durationMs overrides the sprite-wide
+// Sprite.durationMs for this frame only.
+export interface AnimFrame {
   frameId: string;
   durationMs?: number;
 }
 
-export interface Clip {
+// One named row of the frame grid. Every frame belongs to exactly one row.
+export interface Animation {
   name: string;
-  loop: LoopMode;
-  fps: number;
-  entries: ClipEntry[];
+  frames: AnimFrame[];
 }
 
 export interface Sprite {
@@ -44,10 +43,11 @@ export interface Sprite {
   width: number;
   height: number;
   tags: string[];
+  // Default hold time per frame during playback, in milliseconds.
+  durationMs: number;
   layers: LayerDef[];
-  clips: Clip[];
-  // Computed at read time from frames/*.px on disk — not stored in
-  // sprite.md itself (frame existence has no manifest, see the plan).
+  animations: Animation[];
+  // Every frame id in grid order (the animation rows flattened).
   frameIds: string[];
   created?: string;
   updated?: string;
@@ -74,19 +74,21 @@ export interface SpriteSummary {
   height: number;
   tags: string[];
   frameCount: number;
-  clipNames: string[];
+  animationNames: string[];
 }
 
 export interface SpritePatch {
   name?: string;
   tags?: string[];
   layers?: LayerDef[];
+  durationMs?: number;
 }
 
-export interface ClipPatch {
-  loop?: LoopMode;
-  fps?: number;
-  entries?: ClipEntry[];
+// frames may only reorder a row's existing frames or change their
+// durationMs overrides — see sprite.AnimationPatch.
+export interface AnimationPatch {
+  name?: string;
+  frames?: AnimFrame[];
 }
 
 export interface ExportFormat {

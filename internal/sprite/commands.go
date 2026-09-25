@@ -37,7 +37,7 @@ func nextSpriteID() (string, error) {
 }
 
 // NewSprite creates a new sprite with one default layer ("L1"/"base") and
-// persists it immediately.
+// one empty animation row ("default"), and persists it immediately.
 func NewSprite(name string, width, height int, tags string) (Sprite, error) {
 	if width <= 0 {
 		width = 16
@@ -57,8 +57,9 @@ func NewSprite(name string, width, height int, tags string) (Sprite, error) {
 		ID: id, Name: name, Width: width, Height: height,
 		Tags:    splitTags(tags),
 		Created: now, Updated: now,
-		Layers: []LayerDef{{ID: "L1", Name: "base", Visible: true, Opacity: 1}},
-		Clips:  []Clip{},
+		DurationMS: DefaultFrameDurationMS,
+		Layers:     []LayerDef{{ID: "L1", Name: "base", Visible: true, Opacity: 1}},
+		Animations: []Animation{{Name: "default", Frames: []AnimFrame{}}},
 	}
 	s.Path = filepath.Join(Dir, id+"-"+slugify(name), "sprite.md")
 	if err := s.Save(); err != nil {
@@ -98,9 +99,10 @@ func DeleteSprite(id string) error {
 // updates, mirroring go-backlog-cli's TicketPatch: only non-nil fields
 // change.
 type SpritePatch struct {
-	Name   *string     `json:"name,omitempty"`
-	Tags   *[]string   `json:"tags,omitempty"`
-	Layers *[]LayerDef `json:"layers,omitempty"`
+	Name       *string     `json:"name,omitempty"`
+	Tags       *[]string   `json:"tags,omitempty"`
+	Layers     *[]LayerDef `json:"layers,omitempty"`
+	DurationMS *int        `json:"durationMs,omitempty"`
 }
 
 // UpdateSprite applies patch to the sprite matching id, reslugging its
@@ -124,6 +126,12 @@ func UpdateSprite(id string, patch SpritePatch) (Sprite, error) {
 	}
 	if patch.Layers != nil {
 		s.Layers = *patch.Layers
+	}
+	if patch.DurationMS != nil {
+		if *patch.DurationMS <= 0 {
+			return Sprite{}, fmt.Errorf("duration must be positive, got %d", *patch.DurationMS)
+		}
+		s.DurationMS = *patch.DurationMS
 	}
 	s.Updated = time.Now().UTC()
 
@@ -257,10 +265,28 @@ func DeleteLayer(s *Sprite, layerID string) error {
 	return s.Save()
 }
 
-// AddFrame creates a new blank frame (every layer filled with '.') for s,
-// with the next never-reused frame id, and saves it.
-func AddFrame(s Sprite) (Frame, error) {
-	id, err := nextFrameID(s)
+// AddFrame creates a new blank frame (every layer filled with '.') with the
+// next never-reused frame id, appends it to the end of the named animation
+// row (the last row when animation is "", creating a "default" row if the
+// sprite has none), and saves both.
+//
+// The frame file is written before sprite.md: if interrupted in between,
+// the orphaned frame is simply adopted into the first row on the next load
+// (see normalizeAnimations) rather than leaving a dangling reference.
+func AddFrame(s *Sprite, animation string) (Frame, error) {
+	idx := len(s.Animations) - 1
+	if animation != "" {
+		idx = s.FindAnimation(animation)
+		if idx < 0 {
+			return Frame{}, fmt.Errorf("no animation named %q", animation)
+		}
+	}
+	if idx < 0 {
+		s.Animations = append(s.Animations, Animation{Name: "default", Frames: []AnimFrame{}})
+		idx = 0
+	}
+
+	id, err := nextFrameID(*s)
 	if err != nil {
 		return Frame{}, err
 	}
@@ -276,105 +302,127 @@ func AddFrame(s Sprite) (Frame, error) {
 		}
 		f.Layers[ld.ID] = grid
 	}
-	if err := f.Save(s); err != nil {
+	if err := f.Save(*s); err != nil {
+		return Frame{}, err
+	}
+	s.Animations[idx].Frames = append(s.Animations[idx].Frames, AnimFrame{FrameID: id})
+	if err := s.Save(); err != nil {
 		return Frame{}, err
 	}
 	return f, nil
 }
 
-// DeleteFrame removes a frame file. If the frame is referenced by any clip,
-// the delete is refused unless force is true, in which case the references
-// are also stripped from those clips (and s is re-saved) so no clip is left
-// pointing at a nonexistent frame.
-func DeleteFrame(s *Sprite, frameID string, force bool) error {
-	referenced := false
-	for _, c := range s.Clips {
-		for _, e := range c.Entries {
-			if e.FrameID == frameID {
-				referenced = true
+// DeleteFrame removes a frame file and its cell in whichever animation row
+// holds it.
+func DeleteFrame(s *Sprite, frameID string) error {
+	path := filepath.Join(framesDir(*s), frameID+".px")
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("no frame %s", frameID)
+	}
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	if i := s.AnimationOf(frameID); i >= 0 {
+		kept := []AnimFrame{}
+		for _, f := range s.Animations[i].Frames {
+			if f.FrameID != frameID {
+				kept = append(kept, f)
 			}
 		}
+		s.Animations[i].Frames = kept
 	}
-	if referenced && !force {
-		return fmt.Errorf("frame %s is referenced by a clip; delete with force=true to remove it there too", frameID)
-	}
-	if referenced {
-		for i := range s.Clips {
-			kept := s.Clips[i].Entries[:0]
-			for _, e := range s.Clips[i].Entries {
-				if e.FrameID != frameID {
-					kept = append(kept, e)
-				}
-			}
-			s.Clips[i].Entries = kept
-		}
-		if err := s.Save(); err != nil {
-			return err
-		}
-	}
-	return os.Remove(filepath.Join(framesDir(*s), frameID+".px"))
+	return s.Save()
 }
 
-// NewClip creates a named clip on s and saves it. Returns an error if a
-// clip with that name already exists.
-func NewClip(s *Sprite, name string, loop LoopMode, fps float64) (Clip, error) {
-	for _, c := range s.Clips {
-		if c.Name == name {
-			return Clip{}, fmt.Errorf("clip %q already exists", name)
-		}
+func validateAnimationName(s Sprite, name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("animation name must not be empty")
 	}
-	if fps <= 0 {
-		fps = 12
+	if strings.ContainsAny(name, "\r\n") || name != strings.TrimSpace(name) {
+		return fmt.Errorf("invalid animation name %q", name)
 	}
-	c := Clip{Name: name, Loop: loop, FPS: fps, Entries: []ClipEntry{}}
-	s.Clips = append(s.Clips, c)
+	if s.FindAnimation(name) >= 0 {
+		return fmt.Errorf("animation %q already exists", name)
+	}
+	return nil
+}
+
+// AddAnimation appends a new, empty animation row to s and saves it.
+func AddAnimation(s *Sprite, name string) (Animation, error) {
+	if err := validateAnimationName(*s, name); err != nil {
+		return Animation{}, err
+	}
+	a := Animation{Name: name, Frames: []AnimFrame{}}
+	s.Animations = append(s.Animations, a)
 	if err := s.Save(); err != nil {
-		return Clip{}, err
+		return Animation{}, err
 	}
-	return c, nil
+	return a, nil
 }
 
-// ClipPatch carries pointer-optional/whole-slice-replace fields for a clip
-// update: Entries is replaced wholesale rather than spliced, matching
-// go-backlog-cli's "coarse patch, let the caller build the new value"
-// style.
-type ClipPatch struct {
-	Loop    *LoopMode    `json:"loop,omitempty"`
-	FPS     *float64     `json:"fps,omitempty"`
-	Entries *[]ClipEntry `json:"entries,omitempty"`
+// AnimationPatch renames a row and/or replaces its frame list wholesale.
+// A new Frames list may only reorder the row's existing frames or change
+// their duration overrides — it must contain exactly the same frame ids, so
+// the "every frame in exactly one row" invariant can't be broken by a
+// patch. Frames are created and removed via AddFrame/DeleteFrame instead.
+type AnimationPatch struct {
+	Name   *string      `json:"name,omitempty"`
+	Frames *[]AnimFrame `json:"frames,omitempty"`
 }
 
-// UpdateClip applies patch to the named clip on s and saves the result.
-func UpdateClip(s *Sprite, name string, patch ClipPatch) (Clip, error) {
-	for i := range s.Clips {
-		if s.Clips[i].Name != name {
-			continue
-		}
-		if patch.Loop != nil {
-			s.Clips[i].Loop = *patch.Loop
-		}
-		if patch.FPS != nil {
-			s.Clips[i].FPS = *patch.FPS
-		}
-		if patch.Entries != nil {
-			s.Clips[i].Entries = *patch.Entries
-		}
-		if err := s.Save(); err != nil {
-			return Clip{}, err
-		}
-		return s.Clips[i], nil
+// UpdateAnimation applies patch to the named row of s and saves the result.
+func UpdateAnimation(s *Sprite, name string, patch AnimationPatch) (Animation, error) {
+	i := s.FindAnimation(name)
+	if i < 0 {
+		return Animation{}, fmt.Errorf("no animation named %q", name)
 	}
-	return Clip{}, fmt.Errorf("no clip named %q", name)
+	if patch.Name != nil && *patch.Name != name {
+		if err := validateAnimationName(*s, *patch.Name); err != nil {
+			return Animation{}, err
+		}
+		s.Animations[i].Name = *patch.Name
+	}
+	if patch.Frames != nil {
+		current := map[string]bool{}
+		for _, f := range s.Animations[i].Frames {
+			current[f.FrameID] = true
+		}
+		seen := map[string]bool{}
+		for _, f := range *patch.Frames {
+			if !current[f.FrameID] || seen[f.FrameID] {
+				return Animation{}, fmt.Errorf("frames must be a reordering of the row's existing frames (bad entry %q)", f.FrameID)
+			}
+			if f.DurationMS != nil && *f.DurationMS <= 0 {
+				return Animation{}, fmt.Errorf("frame %s: duration must be positive", f.FrameID)
+			}
+			seen[f.FrameID] = true
+		}
+		if len(seen) != len(current) {
+			return Animation{}, fmt.Errorf("frames must include every frame already in the row")
+		}
+		s.Animations[i].Frames = append([]AnimFrame{}, *patch.Frames...)
+	}
+	if err := s.Save(); err != nil {
+		return Animation{}, err
+	}
+	return s.Animations[i], nil
 }
 
-// DeleteClip removes the named clip from s and saves the result. Frame
-// files themselves are untouched — a clip is just a named view over them.
-func DeleteClip(s *Sprite, name string) error {
-	for i, c := range s.Clips {
-		if c.Name == name {
-			s.Clips = append(s.Clips[:i], s.Clips[i+1:]...)
-			return s.Save()
+// DeleteAnimation removes the named row from s along with every frame file
+// in it, then saves s. Same frames-first, sprite.md-last ordering as
+// AddLayer: an interrupted delete leaves at worst a reference to a missing
+// frame, which the next load drops.
+func DeleteAnimation(s *Sprite, name string) error {
+	i := s.FindAnimation(name)
+	if i < 0 {
+		return fmt.Errorf("no animation named %q", name)
+	}
+	for _, f := range s.Animations[i].Frames {
+		err := os.Remove(filepath.Join(framesDir(*s), f.FrameID+".px"))
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("frame %s: %w", f.FrameID, err)
 		}
 	}
-	return fmt.Errorf("no clip named %q", name)
+	s.Animations = append(s.Animations[:i], s.Animations[i+1:]...)
+	return s.Save()
 }
