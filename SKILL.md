@@ -132,6 +132,8 @@ browser tab with two views, switched via a sidebar nav:
   frames play left to right. The preview panel loops the selected row
   (using the flattened export render, so layer visibility/opacity apply).
   Frames hold for the sprite's default duration unless overridden per frame.
+  Drag a frame to reorder it or move it to another row; the `+` badge on a
+  frame duplicates it (pixels and duration override) right after itself.
 - **Settings**: the project's palette editor. Pick a built-in preset or edit
   individual colors (add/remove/reorder), then apply — this remaps every
   sprite's existing pixels to the nearest matching color in the new palette
@@ -171,7 +173,7 @@ changes needed.
   resolution, the one-row-per-frame normalization, and the `## animations`
   block format.
 - `internal/sprite/commands.go` — `NewSprite`, `Reslug`, `AddFrame`,
-  `DeleteFrame`, `AddAnimation`, `UpdateAnimation`, `DeleteAnimation`, patch
+  `DeleteFrame`, `MoveFrame`, `DuplicateFrame`, `AddAnimation`, `UpdateAnimation`, `DeleteAnimation`, patch
   types.
 - `internal/sprite/convert.go` — `LayerProps`/`PixelModifyItem` (dotting's
   exact JSON shape) ⇄ `Frame` conversion.

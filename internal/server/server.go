@@ -46,6 +46,8 @@ func Run(args []string) error {
 	mux.HandleFunc("GET /api/sprites/{id}/frames/{frameId}", handleGetFrame)
 	mux.HandleFunc("PUT /api/sprites/{id}/frames/{frameId}", handlePutFrame)
 	mux.HandleFunc("DELETE /api/sprites/{id}/frames/{frameId}", handleDeleteFrame)
+	mux.HandleFunc("POST /api/sprites/{id}/frames/{frameId}/move", handleMoveFrame)
+	mux.HandleFunc("POST /api/sprites/{id}/frames/{frameId}/duplicate", handleDuplicateFrame)
 
 	mux.HandleFunc("POST /api/sprites/{id}/layers", handleAddLayer)
 	mux.HandleFunc("DELETE /api/sprites/{id}/layers/{layerId}", handleDeleteLayer)
@@ -262,6 +264,45 @@ func handleDeleteFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeSprite(w, *s)
+}
+
+type moveFrameRequest struct {
+	Animation string `json:"animation"`
+	// Before is the frame to insert in front of ("" = end of the row).
+	Before string `json:"before"`
+}
+
+// handleMoveFrame moves a frame to another position, in its own row or a
+// different one (see sprite.MoveFrame).
+func handleMoveFrame(w http.ResponseWriter, r *http.Request) {
+	s := findSprite(w, r.PathValue("id"))
+	if s == nil {
+		return
+	}
+	var req moveFrameRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := sprite.MoveFrame(s, r.PathValue("frameId"), req.Animation, req.Before); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeSprite(w, *s)
+}
+
+// handleDuplicateFrame copies a frame into a new one right after it.
+func handleDuplicateFrame(w http.ResponseWriter, r *http.Request) {
+	s := findSprite(w, r.PathValue("id"))
+	if s == nil {
+		return
+	}
+	f, err := sprite.DuplicateFrame(s, r.PathValue("frameId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, map[string]string{"frameId": f.ID})
 }
 
 type addLayerRequest struct {

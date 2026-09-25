@@ -30,6 +30,10 @@ export default function FrameGrid({
   const [formats, setFormats] = useState<ExportFormat[]>([]);
   const [exportFormat, setExportFormat] = useState("sheet-json");
   const [error, setError] = useState<string | null>(null);
+  // Drag-and-drop: the frame being dragged, and where it would land — in
+  // row `animation`, before frame `before` ("" = end of the row).
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ animation: string; before: string } | null>(null);
 
   useEffect(() => {
     api
@@ -100,6 +104,54 @@ export default function FrameGrid({
     onSelectFrame(frameId);
   }
 
+  async function handleDuplicateFrame(frameId: string) {
+    let dup: string;
+    try {
+      ({ frameId: dup } = await api.duplicateFrame(sprite.id, frameId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    await run(() => api.getSprite(sprite.id));
+    onSelectFrame(dup);
+  }
+
+  function updateDropTarget(animation: string, before: string) {
+    if (dropTarget?.animation !== animation || dropTarget.before !== before) {
+      setDropTarget({ animation, before });
+    }
+  }
+
+  // Hovering the left half of a cell targets "before this frame", the right
+  // half "before the next one" (or the end of the row).
+  function handleCellDragOver(e: React.DragEvent, anim: Animation, index: number) {
+    if (!dragging) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    const rect = e.currentTarget.getBoundingClientRect();
+    const after = e.clientX > rect.left + rect.width / 2;
+    const before = after ? (anim.frames[index + 1]?.frameId ?? "") : anim.frames[index].frameId;
+    updateDropTarget(anim.name, before);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    const frameId = dragging;
+    const target = dropTarget;
+    setDragging(null);
+    setDropTarget(null);
+    if (!frameId || !target) return;
+    // Skip drops that wouldn't change anything: onto itself, or just
+    // after itself in its own row.
+    const row = sprite.animations.find((a) => a.name === target.animation);
+    const i = row?.frames.findIndex((f) => f.frameId === frameId) ?? -1;
+    if (i >= 0 && (target.before === frameId || target.before === (row!.frames[i + 1]?.frameId ?? ""))) {
+      return;
+    }
+    run(() => api.moveFrame(sprite.id, frameId, target.animation, target.before));
+  }
+
   async function handleAddAnimation() {
     let n = sprite.animations.length + 1;
     while (sprite.animations.some((a) => a.name === `anim ${n}`)) n++;
@@ -168,8 +220,21 @@ export default function FrameGrid({
         {sprite.animations.map((anim, rowIndex) => (
           <div
             key={rowIndex}
-            className={"frame-grid-row" + (anim.name === selectedAnimation ? " selected" : "")}
+            className={
+              "frame-grid-row" +
+              (anim.name === selectedAnimation ? " selected" : "") +
+              (dragging && dropTarget?.animation === anim.name ? " drop-row" : "")
+            }
             onClick={() => onSelectAnimation(anim.name)}
+            onDragOver={(e) => {
+              if (!dragging) return;
+              e.preventDefault();
+              updateDropTarget(anim.name, "");
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null);
+            }}
+            onDrop={handleDrop}
           >
             <div className="frame-grid-row-header">
               <AnimationNameInput
@@ -204,8 +269,31 @@ export default function FrameGrid({
             <div className="frame-grid-cells">
               {anim.frames.map((f, i) => {
                 const selected = f.frameId === selectedFrameId;
+                const dropBefore =
+                  dragging !== null &&
+                  dropTarget?.animation === anim.name &&
+                  dropTarget.before === f.frameId;
                 return (
-                  <div key={f.frameId} className={"frame-grid-cell" + (selected ? " selected" : "")}>
+                  <div
+                    key={f.frameId}
+                    className={
+                      "frame-grid-cell" +
+                      (selected ? " selected" : "") +
+                      (f.frameId === dragging ? " dragging" : "") +
+                      (dropBefore ? " drop-before" : "")
+                    }
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("text/plain", f.frameId);
+                      e.dataTransfer.effectAllowed = "move";
+                      setDragging(f.frameId);
+                    }}
+                    onDragEnd={() => {
+                      setDragging(null);
+                      setDropTarget(null);
+                    }}
+                    onDragOver={(e) => handleCellDragOver(e, anim, i)}
+                  >
                     <button
                       type="button"
                       className="frame-grid-frame"
@@ -221,6 +309,18 @@ export default function FrameGrid({
                       />
                       <span className="frame-grid-frame-label">{f.frameId}</span>
                     </button>
+                    <span
+                      className="frame-grid-frame-duplicate"
+                      role="button"
+                      tabIndex={0}
+                      title="Duplicate frame"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDuplicateFrame(f.frameId);
+                      }}
+                    >
+                      +
+                    </span>
                     <span
                       className="frame-grid-frame-delete"
                       role="button"
@@ -264,7 +364,12 @@ export default function FrameGrid({
               })}
               <button
                 type="button"
-                className="frame-grid-add-frame"
+                className={
+                  "frame-grid-add-frame" +
+                  (dragging && dropTarget?.animation === anim.name && dropTarget.before === ""
+                    ? " drop-before"
+                    : "")
+                }
                 title={`Add a frame to "${anim.name}"`}
                 onClick={(e) => {
                   e.stopPropagation();

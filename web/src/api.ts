@@ -90,6 +90,26 @@ export function deleteFrame(spriteId: string, frameId: string): Promise<Sprite> 
   return request(`/sprites/${spriteId}/frames/${frameId}`, { method: "DELETE" });
 }
 
+// Moves a frame into `animation` (its own row or another), directly before
+// frame `before`, or to the end of the row when `before` is omitted.
+export function moveFrame(
+  spriteId: string,
+  frameId: string,
+  animation: string,
+  before?: string,
+): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/frames/${frameId}/move`, {
+    method: "POST",
+    body: JSON.stringify({ animation, before: before ?? "" }),
+  });
+}
+
+// Copies a frame (pixels + duration override) into a new frame placed right
+// after it in the same row.
+export function duplicateFrame(spriteId: string, frameId: string): Promise<{ frameId: string }> {
+  return request(`/sprites/${spriteId}/frames/${frameId}/duplicate`, { method: "POST" });
+}
+
 // -- layers ----------------------------------------------------------------
 // Adding/removing a layer retrofits or strips a block on every existing
 // frame (see sprite.AddLayer/DeleteLayer) — unlike rename/reorder/opacity/

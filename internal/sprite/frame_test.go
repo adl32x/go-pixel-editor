@@ -258,6 +258,81 @@ func TestDeleteAnimationDeletesItsFrames(t *testing.T) {
 	}
 }
 
+func TestMoveFrameBetweenRows(t *testing.T) {
+	s, _, _ := setupFourByFour(t)
+	f1, _ := AddFrame(&s, "")
+	f2, _ := AddFrame(&s, "")
+	if _, err := AddAnimation(&s, "walk"); err != nil {
+		t.Fatalf("AddAnimation: %v", err)
+	}
+	f3, _ := AddFrame(&s, "walk")
+	d := 250
+	frames := []AnimFrame{{FrameID: f1.ID, DurationMS: &d}, {FrameID: f2.ID}}
+	if _, err := UpdateAnimation(&s, "default", AnimationPatch{Frames: &frames}); err != nil {
+		t.Fatalf("UpdateAnimation: %v", err)
+	}
+
+	if err := MoveFrame(&s, f1.ID, "walk", f3.ID); err != nil {
+		t.Fatalf("MoveFrame before: %v", err)
+	}
+	if err := MoveFrame(&s, f2.ID, "walk", ""); err != nil {
+		t.Fatalf("MoveFrame append: %v", err)
+	}
+	if err := MoveFrame(&s, f1.ID, "walk", f1.ID); err != nil {
+		t.Fatalf("MoveFrame onto itself: %v", err)
+	}
+	if err := MoveFrame(&s, f1.ID, "default", f3.ID); err == nil {
+		t.Fatal("expected error inserting before a frame of another row")
+	}
+
+	reloaded, _ := Find(s.ID)
+	if n := len(reloaded.Animations[0].Frames); n != 0 {
+		t.Fatalf("default row has %d frames, want 0", n)
+	}
+	walk := reloaded.Animations[1].Frames
+	if len(walk) != 3 || walk[0].FrameID != f1.ID || walk[1].FrameID != f3.ID || walk[2].FrameID != f2.ID {
+		t.Fatalf("walk = %+v, want [%s %s %s]", walk, f1.ID, f3.ID, f2.ID)
+	}
+	if walk[0].DurationMS == nil || *walk[0].DurationMS != 250 {
+		t.Fatalf("moved frame lost its duration override: %+v", walk[0])
+	}
+}
+
+func TestDuplicateFrame(t *testing.T) {
+	s, settings, _ := setupFourByFour(t)
+	f1, _ := AddFrame(&s, "")
+	f2, _ := AddFrame(&s, "")
+	f1.Layers["L1"][1] = []rune(".10.")
+	if err := f1.Save(s); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	d := 40
+	frames := []AnimFrame{{FrameID: f1.ID, DurationMS: &d}, {FrameID: f2.ID}}
+	if _, err := UpdateAnimation(&s, "default", AnimationPatch{Frames: &frames}); err != nil {
+		t.Fatalf("UpdateAnimation: %v", err)
+	}
+
+	dup, err := DuplicateFrame(&s, f1.ID)
+	if err != nil {
+		t.Fatalf("DuplicateFrame: %v", err)
+	}
+	if dup.ID != "f003" {
+		t.Fatalf("dup id = %s, want f003", dup.ID)
+	}
+	reloaded, _ := Find(s.ID)
+	row := reloaded.Animations[0].Frames
+	if len(row) != 3 || row[1].FrameID != dup.ID || row[1].DurationMS == nil || *row[1].DurationMS != 40 {
+		t.Fatalf("row = %+v, want duplicate right after %s with its 40ms override", row, f1.ID)
+	}
+	onDisk, err := parseFrameFile(filepath.Join(framesDir(s), dup.ID+".px"), s, settings)
+	if err != nil {
+		t.Fatalf("parse dup: %v", err)
+	}
+	if got := string(onDisk.Layers["L1"][1]); got != ".10." {
+		t.Fatalf("dup row 1 = %q, want copied pixels .10.", got)
+	}
+}
+
 func TestLegacyClipsAreMigratedToRows(t *testing.T) {
 	s, _, _ := setupFourByFour(t)
 	f1, _ := AddFrame(&s, "")

@@ -532,9 +532,64 @@ a {
   opacity: 0;
 }
 
+.frame-grid-frame-duplicate {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  background: var(--mac-accent);
+  color: #fff;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  text-align: center;
+  line-height: 15px;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+}
+
 .frame-grid-cell:hover .frame-grid-frame-delete,
-.frame-grid-cell.selected .frame-grid-frame-delete {
+.frame-grid-cell.selected .frame-grid-frame-delete,
+.frame-grid-cell:hover .frame-grid-frame-duplicate,
+.frame-grid-cell.selected .frame-grid-frame-duplicate {
   opacity: 1;
+}
+
+/* -- drag and drop -- */
+
+.frame-grid-cell[draggable="true"] {
+  cursor: grab;
+}
+
+.frame-grid-cell.dragging {
+  opacity: 0.35;
+}
+
+.frame-grid-row.drop-row {
+  border-color: var(--mac-accent);
+  border-style: dashed;
+}
+
+/* Insertion marker: a bar in the gap to the left of the target. */
+.frame-grid-cell.drop-before::before,
+.frame-grid-add-frame.drop-before::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--mac-accent);
+}
+
+.frame-grid-add-frame {
+  position: relative;
+}
+
+.frame-grid-cells {
+  padding-left: 6px;
 }
 
 .frame-grid-cell-controls {

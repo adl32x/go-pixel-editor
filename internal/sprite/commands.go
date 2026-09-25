@@ -426,3 +426,102 @@ func DeleteAnimation(s *Sprite, name string) error {
 	s.Animations = append(s.Animations[:i], s.Animations[i+1:]...)
 	return s.Save()
 }
+
+// MoveFrame moves frameID out of its current row and into the animation
+// named toAnim, directly before the frame beforeID (or at the end of the
+// row when beforeID is ""). The frame keeps its duration override. This one
+// operation covers both reordering within a row and moving between rows.
+func MoveFrame(s *Sprite, frameID, toAnim, beforeID string) error {
+	from := s.AnimationOf(frameID)
+	if from < 0 {
+		return fmt.Errorf("no frame %s", frameID)
+	}
+	to := s.FindAnimation(toAnim)
+	if to < 0 {
+		return fmt.Errorf("no animation named %q", toAnim)
+	}
+	if beforeID == frameID {
+		return nil
+	}
+	if beforeID != "" && s.AnimationOf(beforeID) != to {
+		return fmt.Errorf("frame %s is not in animation %q", beforeID, toAnim)
+	}
+
+	var moving AnimFrame
+	kept := []AnimFrame{}
+	for _, f := range s.Animations[from].Frames {
+		if f.FrameID == frameID {
+			moving = f
+		} else {
+			kept = append(kept, f)
+		}
+	}
+	s.Animations[from].Frames = kept
+
+	target := s.Animations[to].Frames
+	at := len(target)
+	for i, f := range target {
+		if f.FrameID == beforeID {
+			at = i
+			break
+		}
+	}
+	out := make([]AnimFrame, 0, len(target)+1)
+	out = append(out, target[:at]...)
+	out = append(out, moving)
+	out = append(out, target[at:]...)
+	s.Animations[to].Frames = out
+	return s.Save()
+}
+
+// DuplicateFrame copies frameID's pixels (every layer) and duration
+// override into a new frame with the next never-reused id, inserted
+// directly after the original in the same row. Like AddFrame, the frame
+// file is written before sprite.md.
+func DuplicateFrame(s *Sprite, frameID string) (Frame, error) {
+	row := s.AnimationOf(frameID)
+	if row < 0 {
+		return Frame{}, fmt.Errorf("no frame %s", frameID)
+	}
+	src, err := FindFrame(*s, frameID)
+	if err != nil {
+		return Frame{}, err
+	}
+	if src == nil {
+		return Frame{}, fmt.Errorf("no frame %s", frameID)
+	}
+	id, err := nextFrameID(*s)
+	if err != nil {
+		return Frame{}, err
+	}
+	f := Frame{ID: id, Layers: map[string][][]rune{}}
+	for layerID, grid := range src.Layers {
+		cp := make([][]rune, len(grid))
+		for r, rowRunes := range grid {
+			cp[r] = append([]rune(nil), rowRunes...)
+		}
+		f.Layers[layerID] = cp
+	}
+	if err := f.Save(*s); err != nil {
+		return Frame{}, err
+	}
+
+	frames := s.Animations[row].Frames
+	out := make([]AnimFrame, 0, len(frames)+1)
+	for _, af := range frames {
+		out = append(out, af)
+		if af.FrameID == frameID {
+			dup := AnimFrame{FrameID: id}
+			if af.DurationMS != nil {
+				ms := *af.DurationMS
+				dup.DurationMS = &ms
+			}
+			out = append(out, dup)
+		}
+	}
+	s.Animations[row].Frames = out
+	if err := s.Save(); err != nil {
+		return Frame{}, err
+	}
+	return f, nil
+}
