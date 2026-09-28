@@ -42,6 +42,8 @@ func main() {
 		err = runBuild(args)
 	case "import":
 		err = runImport(args)
+	case "resize":
+		err = runResize(args)
 	case "serve":
 		err = server.Run(args)
 	case "help", "--help", "-h":
@@ -84,6 +86,13 @@ Commands:
     --out=<subfolder>              (default: its folder under build_out)
     --frame-width=N --frame-height=N  split a bare PNG into a grid
                                    (default: the whole image is one frame)
+  resize <id>                   Change a sprite's canvas size (every frame)
+    --width=N --height=N           (default: unchanged)
+    --anchor=<pos>                 part that stays put: center (default),
+                                   top-left, top, top-right, left, right,
+                                   bottom-left, bottom, bottom-right.
+                                   Growing adds transparent pixels;
+                                   shrinking cuts off what doesn't fit.
   serve                          Open the browser-based canvas/timeline editor
     --port=NNNN                    (default: 7788)
     --no-open                      Don't launch the browser automatically
@@ -263,6 +272,43 @@ func runImport(args []string) error {
 	if rep.TranslucentPixels > 0 {
 		fmt.Printf("warning: %d pixel(s) had partial alpha (>= 50%% kept opaque, the rest dropped)\n", rep.TranslucentPixels)
 	}
+	return nil
+}
+
+// runResize changes a sprite's canvas size (see sprite.ResizeSprite).
+func runResize(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: pixel resize <id> [--width=N] [--height=N] [--anchor=center]")
+	}
+	s, err := sprite.Find(args[0])
+	if err != nil {
+		return err
+	}
+	if s == nil {
+		return fmt.Errorf("no sprite with id %s", sprite.NormalizeID(args[0]))
+	}
+	width, height, anchor := s.Width, s.Height, "center"
+	for _, a := range args[1:] {
+		switch {
+		case strings.HasPrefix(a, "--width="):
+			if width, err = strconv.Atoi(strings.TrimPrefix(a, "--width=")); err != nil {
+				return fmt.Errorf("invalid --width: %w", err)
+			}
+		case strings.HasPrefix(a, "--height="):
+			if height, err = strconv.Atoi(strings.TrimPrefix(a, "--height=")); err != nil {
+				return fmt.Errorf("invalid --height: %w", err)
+			}
+		case strings.HasPrefix(a, "--anchor="):
+			anchor = strings.TrimPrefix(a, "--anchor=")
+		default:
+			return fmt.Errorf("unknown flag %q", a)
+		}
+	}
+	oldW, oldH := s.Width, s.Height
+	if err := sprite.ResizeSprite(s, width, height, anchor); err != nil {
+		return err
+	}
+	fmt.Printf("Resized %s from %dx%d to %dx%d (anchor %s)\n", s.ID, oldW, oldH, s.Width, s.Height, anchor)
 	return nil
 }
 

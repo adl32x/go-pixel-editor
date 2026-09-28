@@ -1,12 +1,14 @@
 import { useState } from "react";
 import type { Sprite } from "../types";
+import ResizeControl from "./ResizeControl";
 
 interface SpriteMetaProps {
   sprite: Sprite;
   onSave: (patch: { name?: string; tags?: string[]; out?: string }) => Promise<void>;
+  onResize: (width: number, height: number, anchor: string) => Promise<void>;
 }
 
-export default function SpriteMeta({ sprite, onSave }: SpriteMetaProps) {
+export default function SpriteMeta({ sprite, onSave, onResize }: SpriteMetaProps) {
   const [name, setName] = useState(sprite.name);
   const [tags, setTags] = useState(sprite.tags.join(", "));
   const [out, setOut] = useState(sprite.out);
@@ -48,9 +50,7 @@ export default function SpriteMeta({ sprite, onSave }: SpriteMetaProps) {
         onChange={(e) => setOut(e.target.value)}
         onBlur={handleBlurSave}
       />
-      <span className="sprite-meta-dims">
-        {sprite.width}x{sprite.height}
-      </span>
+      <ResizeControl width={sprite.width} height={sprite.height} onResize={onResize} />
       {error && <span className="frame-grid-error">{error}</span>}
     </div>
   );

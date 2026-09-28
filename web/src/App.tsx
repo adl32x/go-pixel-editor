@@ -169,6 +169,20 @@ export default function App() {
     await Promise.all([refreshSprite(spriteId), refreshSprites()]);
   }
 
+  // Resizing rewrites every frame at a new grid size. dotting can't be
+  // re-shaped in place (see the sprite-switch effect above), so this swaps
+  // in the resized sprite and frame data and lets the canvas key — which
+  // includes the size — remount a fresh editor.
+  async function handleResize(width: number, height: number, anchor: string) {
+    if (!spriteId) return;
+    const updated = await api.resizeSprite(spriteId, width, height, anchor);
+    const layers = frameId ? await api.getFrame(spriteId, frameId) : EMPTY_LAYERS;
+    setSprite(updated);
+    setInitLayers(layers);
+    refreshSprites();
+    bumpPreview();
+  }
+
   async function handleLayersChange(layers: Sprite["layers"]) {
     if (!spriteId) return;
     await api.patchSprite(spriteId, { layers });
@@ -284,7 +298,12 @@ export default function App() {
                 switch, they'd keep showing the *previous* sprite's values
                 until the user manually edits them, risking a save that
                 silently renames the wrong sprite. */}
-            <SpriteMeta key={sprite.id} sprite={sprite} onSave={handleSaveMeta} />
+            <SpriteMeta
+              key={sprite.id}
+              sprite={sprite}
+              onSave={handleSaveMeta}
+              onResize={handleResize}
+            />
 
             <div className="app-workspace">
               <PaletteBar
@@ -308,7 +327,15 @@ export default function App() {
                   // update; see handleAddLayer/handleDeleteLayer, which
                   // refresh initLayers themselves instead of going through
                   // reloadActiveFrame()'s loadLayers() call for this reason.
-                  key={sprite.id + ":" + sprite.layers.map((l) => l.id).join(",")}
+                  key={
+                    sprite.id +
+                    ":" +
+                    sprite.width +
+                    "x" +
+                    sprite.height +
+                    ":" +
+                    sprite.layers.map((l) => l.id).join(",")
+                  }
                   ref={canvasRef}
                   initLayers={initLayers}
                   brushTool={brushTool}

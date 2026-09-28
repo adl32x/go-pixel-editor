@@ -743,3 +743,40 @@ a {
 .sprite-meta .frame-grid-error {
   font-size: 11px;
 }
+
+.resize-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--mac-text-secondary);
+}
+
+.resize-control button {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.resize-control input[type="number"] {
+  width: 56px;
+}
+
+.resize-anchor {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 18px);
+  gap: 2px;
+}
+
+.resize-control .resize-anchor button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.resize-anchor button.selected {
+  background: var(--mac-accent);
+  border-color: var(--mac-accent);
+  color: #fff;
+}

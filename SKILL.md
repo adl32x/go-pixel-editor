@@ -116,6 +116,7 @@ pixel show <id>                  # print one sprite's sprite.md in full
 pixel export <id> --animation= --format=gif|sheet-json|sheet-grid --out=
 pixel build [id...] --out=       # render sprites into the game's asset folder
 pixel import <sheet.json|png> --name= --out= --frame-width= --frame-height=
+pixel resize <id> --width= --height= --anchor=center   # canvas size, every frame
 pixel serve --port= --no-open    # browser-based canvas/timeline editor (default port 7788)
 pixel version / help
 ```
@@ -167,6 +168,16 @@ subfolder" field in the editor), so each sprite becomes
 - Two sprites building to the same path is an error.
 
 The same pair is available per sprite as the `sheet-grid` export format.
+
+## Resizing the canvas (`pixel resize`, or Resize in the editor)
+
+Changes a sprite's width/height across every layer of every frame.
+Growing pads with transparent pixels; shrinking is a plain crop — whatever
+falls outside the new canvas is gone (the editor confirms first). The
+anchor (`top-left`, `top`, `top-right`, `left`, `center` — the default —
+`right`, `bottom-left`, `bottom`, `bottom-right`) is the part of the
+current canvas that stays in place, e.g. `bottom` keeps a character's feet
+put while it grows upward. Max 1024x1024.
 
 ## Importing existing art (`pixel import`)
 

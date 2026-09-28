@@ -111,6 +111,21 @@ export function duplicateFrame(spriteId: string, frameId: string): Promise<{ fra
   return request(`/sprites/${spriteId}/frames/${frameId}/duplicate`, { method: "POST" });
 }
 
+// Changes the canvas size of every frame: transparent padding when
+// growing, a destructive crop when shrinking. `anchor` is the part that
+// stays put (see sprite.Anchors).
+export function resizeSprite(
+  spriteId: string,
+  width: number,
+  height: number,
+  anchor: string,
+): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/resize`, {
+    method: "POST",
+    body: JSON.stringify({ width, height, anchor }),
+  });
+}
+
 // -- layers ----------------------------------------------------------------
 // Adding/removing a layer retrofits or strips a block on every existing
 // frame (see sprite.AddLayer/DeleteLayer) — unlike rename/reorder/opacity/

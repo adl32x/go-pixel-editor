@@ -66,7 +66,8 @@ export default function FrameGrid({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sprite.id, frameIdsKey]);
+    // Size too: a resize rewrites every frame without changing any frame id.
+  }, [sprite.id, frameIdsKey, sprite.width, sprite.height]);
 
   useEffect(() => {
     if (version === 0 || !selectedFrameId) return;

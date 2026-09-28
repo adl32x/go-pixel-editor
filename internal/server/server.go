@@ -49,6 +49,7 @@ func Run(args []string) error {
 	mux.HandleFunc("POST /api/sprites/{id}/frames/{frameId}/move", handleMoveFrame)
 	mux.HandleFunc("POST /api/sprites/{id}/frames/{frameId}/duplicate", handleDuplicateFrame)
 
+	mux.HandleFunc("POST /api/sprites/{id}/resize", handleResizeSprite)
 	mux.HandleFunc("POST /api/sprites/{id}/layers", handleAddLayer)
 	mux.HandleFunc("DELETE /api/sprites/{id}/layers/{layerId}", handleDeleteLayer)
 
@@ -305,6 +306,32 @@ func handleDuplicateFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]string{"frameId": f.ID})
+}
+
+type resizeRequest struct {
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	Anchor string `json:"anchor"`
+}
+
+// handleResizeSprite changes the canvas size of every frame (see
+// sprite.ResizeSprite): transparent padding when growing, a destructive
+// crop when shrinking.
+func handleResizeSprite(w http.ResponseWriter, r *http.Request) {
+	s := findSprite(w, r.PathValue("id"))
+	if s == nil {
+		return
+	}
+	var req resizeRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := sprite.ResizeSprite(s, req.Width, req.Height, req.Anchor); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeSprite(w, *s)
 }
 
 type addLayerRequest struct {
