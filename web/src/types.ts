@@ -45,6 +45,8 @@ export interface Sprite {
   tags: string[];
   // Default hold time per frame during playback, in milliseconds.
   durationMs: number;
+  // Subfolder of the project's build folder this sprite builds into ("" = root).
+  out: string;
   layers: LayerDef[];
   animations: Animation[];
   // Every frame id in grid order (the animation rows flattened).
@@ -59,6 +61,17 @@ export interface Settings {
   activePreset: string;
   palette: PaletteEntry[];
   updated?: string;
+  // Folder `pixel build` / the Build button writes into ("" = not set).
+  buildOut?: string;
+}
+
+// POST /api/build — paths are relative to `out`.
+export interface BuildResult {
+  out: string;
+  written: string[];
+  unchanged: string[];
+  removed: string[];
+  skipped: string[];
 }
 
 export interface PalettePresetInfo {
@@ -82,6 +95,7 @@ export interface SpritePatch {
   tags?: string[];
   layers?: LayerDef[];
   durationMs?: number;
+  out?: string;
 }
 
 // frames may only reorder a row's existing frames or change their

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import * as api from "../api";
 import type { AnimFrame, Animation, ExportFormat, LayerProps, Sprite } from "../types";
 import FrameThumbnail from "./FrameThumbnail";
+import { summarizeBuild } from "../settings/BuildSettings";
 
 interface FrameGridProps {
   sprite: Sprite;
@@ -30,6 +31,7 @@ export default function FrameGrid({
   const [formats, setFormats] = useState<ExportFormat[]>([]);
   const [exportFormat, setExportFormat] = useState("sheet-json");
   const [error, setError] = useState<string | null>(null);
+  const [buildStatus, setBuildStatus] = useState<string | null>(null);
   // Drag-and-drop: the frame being dragged, and where it would land — in
   // row `animation`, before frame `before` ("" = end of the row).
   const [dragging, setDragging] = useState<string | null>(null);
@@ -102,6 +104,16 @@ export default function FrameGrid({
     }
     await run(() => api.getSprite(sprite.id));
     onSelectFrame(frameId);
+  }
+
+  async function handleBuild() {
+    setBuildStatus("Building…");
+    try {
+      setBuildStatus(summarizeBuild(await api.build()));
+    } catch (e) {
+      setBuildStatus(null);
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   async function handleDuplicateFrame(frameId: string) {
@@ -199,6 +211,10 @@ export default function FrameGrid({
           ms
         </label>
         <span className="frame-grid-spacer" />
+        {buildStatus && <span className="frame-grid-build-status">{buildStatus}</span>}
+        <button type="button" title="Build every sprite into the build folder (Settings)" onClick={handleBuild}>
+          Build
+        </button>
         <label>
           Export
           <select value={exportFormat} onChange={(e) => setExportFormat(e.target.value)}>

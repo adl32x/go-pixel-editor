@@ -232,3 +232,51 @@ func TestConcurrentSavesNeverProduceEmptyFile(t *testing.T) {
 	close(stop)
 	wg.Wait()
 }
+
+func TestSettingsBuildOutRoundTrip(t *testing.T) {
+	t.Chdir(t.TempDir())
+	s, err := LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings: %v", err)
+	}
+	s.BuildOut = "assets/sprites"
+	if err := s.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := LoadSettings()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got.BuildOut != "assets/sprites" {
+		t.Fatalf("BuildOut = %q, want assets/sprites", got.BuildOut)
+	}
+	if _, err := RemapPalette(got.ActivePreset, []string{"#000000", "#ffffff"}); err != nil {
+		t.Fatalf("RemapPalette: %v", err)
+	}
+	if got, _ := LoadSettings(); got.BuildOut != "assets/sprites" {
+		t.Fatalf("RemapPalette dropped BuildOut: %q", got.BuildOut)
+	}
+}
+
+func TestCleanOutDir(t *testing.T) {
+	for in, want := range map[string]string{
+		"": "", ".": "", "characters": "characters", "characters/": "characters",
+		"a//b/./c": "a/b/c", `a\b`: "a/b", "a/../b": "b",
+	} {
+		got, err := CleanOutDir(in)
+		if err != nil || got != want {
+			t.Errorf("CleanOutDir(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"/abs", "..", "../up", "a/../../up"} {
+		if _, err := CleanOutDir(bad); err == nil {
+			t.Errorf("CleanOutDir(%q): expected error", bad)
+		}
+	}
+}
+
+func TestSlugKeepsUnderscores(t *testing.T) {
+	if got := (Sprite{Name: "Mossling_30 v2"}).Slug(); got != "mossling_30-v2" {
+		t.Fatalf("slug = %q, want mossling_30-v2", got)
+	}
+}

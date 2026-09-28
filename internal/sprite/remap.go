@@ -27,6 +27,7 @@ func RemapPalette(activePreset string, colors []string) (Settings, error) {
 		ActivePreset: activePreset,
 		Palette:      paletteEntriesFromColors(colors),
 		Updated:      time.Now().UTC(),
+		BuildOut:     oldSettings.BuildOut,
 	}
 	if len(newSettings.Palette) == 0 {
 		return Settings{}, fmt.Errorf("palette must have at least one color")

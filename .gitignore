@@ -5,3 +5,8 @@ web/tsconfig.tsbuildinfo
 internal/server/dist/*
 !internal/server/dist/.gitkeep
 .DS_Store
+
+# Local sprite data from running `pixel` inside this repo while developing
+# it (manual testing). Real projects commit their .pixel/ — this repo is the
+# tool itself, not a sprite project.
+.pixel/

@@ -113,7 +113,8 @@ never renumbered — they're derived by scanning existing files/lines for
 pixel                            # list every sprite
 pixel new "<name>" --width= --height= --tags=
 pixel show <id>                  # print one sprite's sprite.md in full
-pixel export <id> --animation= --format=gif|sheet-json --out=
+pixel export <id> --animation= --format=gif|sheet-json|sheet-grid --out=
+pixel build [id...] --out=       # render sprites into the game's asset folder
 pixel serve --port= --no-open    # browser-based canvas/timeline editor (default port 7788)
 pixel version / help
 ```
@@ -140,6 +141,32 @@ browser tab with two views, switched via a sidebar nav:
   (a bulk, lossy, project-wide operation the UI warns about before
   committing).
 
+## Build output (`pixel build`)
+
+`.pixel/` is the editable source; `pixel build` (or the editor's **Build**
+button) renders it into the folder a game reads from. The folder has no
+default: set it on the editor's Settings page, as `build_out: assets/images`
+in `.pixel/settings.md`'s frontmatter, or pass `--out=`. A sprite can add
+its own subfolder (`out: characters` in its frontmatter, or the "output
+subfolder" field in the editor), so each sprite becomes
+`<build_out>/<out>/<slug>.png` + `.json`. Slugs keep underscores
+(`mossling_30`).
+
+- The PNG mirrors the frame grid — one row per non-empty animation, frames
+  left to right, as wide as the longest row.
+- The JSON is `{ format: "pixel-sheet/1", name, image, frameWidth,
+  frameHeight, animations }`, where `animations` maps each name to
+  `[{ x, y, w, h, durationMs }]` in playback order (duration already
+  resolved from the sprite default/override). `image` is relative to the
+  JSON file.
+- Output is deterministic, and unchanged files aren't rewritten.
+- A full build (no ids) deletes outputs of sprites that no longer exist (or
+  moved subfolder), but only files listed in `<build_out>/.pixel-build` —
+  the files it wrote itself.
+- Two sprites building to the same path is an error.
+
+The same pair is available per sprite as the `sheet-grid` export format.
+
 ## Configurable export
 
 Export format is chosen per-request, not fixed in code — `internal/export`
@@ -147,6 +174,7 @@ is a small registry of `Format` implementations:
 
 - `gif` — a single looping animated GIF of one animation row, or of every
   row back to back.
+- `sheet-grid` — the `pixel build` sheet + simple JSON (see above).
 - `sheet-json` (default) — `sheet.png` (a horizontal sprite sheet) +
   `data.json` in an Aseprite-compatible schema (frame rects/durations,
   `frameTags` with one tag per animation row) — importable by common engines (e.g. Phaser's

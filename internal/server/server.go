@@ -62,6 +62,8 @@ func Run(args []string) error {
 
 	mux.HandleFunc("GET /api/palette", handleGetPalette)
 	mux.HandleFunc("PUT /api/palette", handlePutPalette)
+	mux.HandleFunc("PATCH /api/settings", handlePatchSettings)
+	mux.HandleFunc("POST /api/build", handleBuild)
 	mux.HandleFunc("GET /api/palette-presets", handleListPalettePresets)
 	mux.HandleFunc("GET /api/palette-presets/{id}", handleGetPalettePreset)
 
@@ -557,6 +559,44 @@ func handlePutPalette(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, settings)
+}
+
+type settingsPatch struct {
+	BuildOut *string `json:"buildOut,omitempty"`
+}
+
+// handlePatchSettings changes project settings other than the palette
+// (which has its own remapping endpoint, PUT /api/palette).
+func handlePatchSettings(w http.ResponseWriter, r *http.Request) {
+	var patch settingsPatch
+	if err := decodeJSON(r, &patch); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	settings, err := sprite.LoadSettings()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if patch.BuildOut != nil {
+		settings.BuildOut = strings.TrimSpace(*patch.BuildOut)
+	}
+	if err := settings.Save(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, settings)
+}
+
+// handleBuild runs `pixel build` for the whole project (see
+// export.BuildProject) — the editor's Build button.
+func handleBuild(w http.ResponseWriter, r *http.Request) {
+	res, err := export.BuildProject("", nil)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, res)
 }
 
 type paletteMetaInfo struct {

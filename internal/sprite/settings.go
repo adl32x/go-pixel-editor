@@ -23,6 +23,10 @@ type Settings struct {
 	ActivePreset string         `json:"activePreset"`
 	Palette      []PaletteEntry `json:"palette"`
 	Updated      time.Time      `json:"updated"`
+	// BuildOut is the folder `pixel build` writes rendered sprites into
+	// (relative to the project root). Deliberately has no default — see
+	// #0031.
+	BuildOut string `json:"buildOut,omitempty"`
 }
 
 // LoadSettings reads SettingsPath, creating it — defaulting to the first
@@ -72,7 +76,7 @@ func paletteEntriesFromColors(colors []string) []PaletteEntry {
 }
 
 // parseSettings parses SettingsPath's content: a frontmatter block
-// (`active_preset`, `updated`) followed by a "## palette" section identical
+// (`active_preset`, `updated`, optional `build_out`) followed by a "## palette" section identical
 // in shape to a sprite's old per-sprite one.
 func parseSettings(data []byte) (Settings, error) {
 	lines := strings.Split(string(data), "\n")
@@ -100,7 +104,7 @@ func parseSettings(data []byte) (Settings, error) {
 	}
 
 	updated, _ := time.Parse(time.RFC3339, fields["updated"])
-	s := Settings{ActivePreset: fields["active_preset"], Updated: updated}
+	s := Settings{ActivePreset: fields["active_preset"], Updated: updated, BuildOut: fields["build_out"]}
 
 	for ; idx < len(lines); idx++ {
 		trimmed := strings.TrimSpace(lines[idx])
@@ -130,6 +134,9 @@ func (s Settings) Save() error {
 	fmt.Fprintln(&b, "---")
 	fmt.Fprintf(&b, "active_preset: %s\n", s.ActivePreset)
 	fmt.Fprintf(&b, "updated: %s\n", s.Updated.UTC().Format(time.RFC3339))
+	if s.BuildOut != "" {
+		fmt.Fprintf(&b, "build_out: %s\n", s.BuildOut)
+	}
 	fmt.Fprintln(&b, "---")
 	fmt.Fprintln(&b)
 	fmt.Fprintln(&b, "## palette")

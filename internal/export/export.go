@@ -127,4 +127,5 @@ type step struct {
 func init() {
 	Register(gifFormat{})
 	Register(sheetJSONFormat{})
+	Register(sheetGridFormat{})
 }

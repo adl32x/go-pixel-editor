@@ -723,3 +723,20 @@ a {
   align-self: center;
   height: 32px;
 }
+
+.frame-grid-build-status {
+  color: var(--mac-text-secondary);
+  font-size: 11px;
+}
+
+.build-settings {
+  margin-top: 16px;
+}
+
+.build-settings-row input {
+  width: 100%;
+}
+
+.sprite-meta .frame-grid-error {
+  font-size: 11px;
+}

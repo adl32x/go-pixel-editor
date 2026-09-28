@@ -1,5 +1,6 @@
 import type {
   AnimationPatch,
+  BuildResult,
   ExportFormat,
   LayerProps,
   PalettePresetInfo,
@@ -203,4 +204,15 @@ export function getPalettePreset(id: string): Promise<{ colors: string[] }> {
 // caller should warn before invoking it.
 export function putPalette(input: { presetId: string } | { colors: string[] }): Promise<Settings> {
   return request("/palette", { method: "PUT", body: JSON.stringify(input) });
+}
+
+// -- settings / build --------------------------------------------------------
+
+export function patchSettings(patch: { buildOut?: string }): Promise<Settings> {
+  return request("/settings", { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+// Builds every sprite into the project's build folder (see `pixel build`).
+export function build(): Promise<BuildResult> {
+  return request("/build", { method: "POST" });
 }

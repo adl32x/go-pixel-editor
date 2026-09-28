@@ -8,6 +8,7 @@ import LayerPanel from "./layers/LayerPanel";
 import PreviewPanel from "./canvas/PreviewPanel";
 import Toolbar from "./canvas/Toolbar";
 import PaletteBar from "./palette/PaletteBar";
+import BuildSettings from "./settings/BuildSettings";
 import PaletteSettings from "./settings/PaletteSettings";
 import SpriteList from "./sprites/SpriteList";
 import SpriteMeta from "./sprites/SpriteMeta";
@@ -162,7 +163,7 @@ export default function App() {
     }
   }
 
-  async function handleSaveMeta(patch: { name?: string; tags?: string[] }) {
+  async function handleSaveMeta(patch: { name?: string; tags?: string[]; out?: string }) {
     if (!spriteId) return;
     await api.patchSprite(spriteId, patch);
     await Promise.all([refreshSprite(spriteId), refreshSprites()]);
@@ -272,7 +273,10 @@ export default function App() {
 
       <main className="app-main">
         {view === "settings" ? (
-          <PaletteSettings settings={settings} onSettingsChanged={handleSettingsChanged} />
+          <>
+            <PaletteSettings settings={settings} onSettingsChanged={handleSettingsChanged} />
+            <BuildSettings settings={settings} onSettingsChanged={setSettings} />
+          </>
         ) : sprite ? (
           <>
             {/* SpriteMeta's name/tags fields are local useState seeded once

@@ -1,24 +1,52 @@
 ---
 id: 0031
-title: Configurable output step: write rendered sprites into the visible repo
-status: todo
-priority: low
-tags: backend, export
+title: "pixel build: render every sprite to a sheet PNG + simple JSON in a given folder"
+status: done
+priority: medium
+tags: backend, export, cli
 ---
 
-User's own framing (from the same request that prompted #0030): "when we
-implement an output step we'll add definitions of how sprites are saved to
-the repo." Captured here as a placeholder for later — not scoped or designed
-yet, deliberately, since it wasn't asked for beyond the mention.
+`.pixel/` is the editable, git-friendly source; a game needs plain rendered
+files in its own asset folder. `pixel build` is that output step.
 
-Working interpretation (confirm with the user before building): `.pixel/` is
-the git-friendly *editable source* (per #0030), separate from wherever a game
-actually wants to consume the art — e.g. an `assets/sprites/` folder read by
-a game engine. This ticket would let a project define one or more named
-output targets (path + export format, reusing #0003/#0009's `internal/export`
-registry) and a way to (re-)run them — on demand via CLI/UI, or perhaps
-automatically after a save — so exported PNGs/sheets/gifs land where the game
-actually expects them, tracked in git like any other generated build
-artifact the user chooses to commit.
+Decisions (from the user):
 
-Not started. Revisit once there's a concrete need/shape in mind.
+1. **Simple custom JSON**, not the Aseprite schema (that stays available as
+   the `sheet-json` export format).
+2. **One sheet per sprite**, no packed atlas.
+3. **The output folder must be given** — no default location. Set it once
+   as `build_out:` in `.pixel/settings.md`, or pass `--out=DIR`; the command
+   errors if neither is set.
+4. **Custom engine**, so no engine-specific formats for now.
+
+Shape:
+
+- `pixel build [ids...] [--out=DIR]` writes `<out>/<slug>.png` and
+  `<out>/<slug>.json` per sprite — plain files, not a zip. Two sprites
+  sharing a slug is an error (rename one).
+- Sheet layout mirrors the editor's frame grid: one PNG row per non-empty
+  animation row, frames left to right, sheet width = the longest row.
+- JSON:
+
+  ```json
+  {
+    "name": "eye",
+    "image": "eye.png",
+    "frameWidth": 16,
+    "frameHeight": 16,
+    "animations": {
+      "blink": [
+        { "x": 0, "y": 0, "w": 16, "h": 16, "durationMs": 100 }
+      ]
+    }
+  }
+  ```
+
+- Deterministic output: rebuilding unchanged art is byte-identical, and a
+  file whose content didn't change isn't rewritten.
+- A full build (no ids) removes outputs of sprites that no longer exist —
+  only files a previous build wrote, tracked in `<out>/.pixel-build`.
+- Also registered as a `sheet-grid` export format, so the per-sprite
+  `pixel export` and the UI's export picker can produce the same pair.
+
+Later, if wanted: a Build button in the UI, or rebuilding on save.

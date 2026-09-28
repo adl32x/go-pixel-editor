@@ -103,6 +103,7 @@ type SpritePatch struct {
 	Tags       *[]string   `json:"tags,omitempty"`
 	Layers     *[]LayerDef `json:"layers,omitempty"`
 	DurationMS *int        `json:"durationMs,omitempty"`
+	Out        *string     `json:"out,omitempty"`
 }
 
 // UpdateSprite applies patch to the sprite matching id, reslugging its
@@ -126,6 +127,13 @@ func UpdateSprite(id string, patch SpritePatch) (Sprite, error) {
 	}
 	if patch.Layers != nil {
 		s.Layers = *patch.Layers
+	}
+	if patch.Out != nil {
+		out, err := CleanOutDir(*patch.Out)
+		if err != nil {
+			return Sprite{}, err
+		}
+		s.Out = out
 	}
 	if patch.DurationMS != nil {
 		if *patch.DurationMS <= 0 {

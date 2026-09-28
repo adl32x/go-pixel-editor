@@ -27,6 +27,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -57,6 +58,10 @@ type Sprite struct {
 	// DurationMS is how long each frame is held during playback unless the
 	// frame overrides it (see AnimFrame.DurationMS).
 	DurationMS int `json:"durationMs"`
+	// Out is an optional subfolder of the project's build folder
+	// (Settings.BuildOut) this sprite's `pixel build` output goes into,
+	// e.g. "characters". Always a clean relative path; "" = the root.
+	Out string `json:"out"`
 
 	Layers     []LayerDef  `json:"layers"`
 	Animations []Animation `json:"animations"`
@@ -109,6 +114,31 @@ func (s Sprite) Summary() (Summary, error) {
 		ID: s.ID, Name: s.Name, Width: s.Width, Height: s.Height,
 		Tags: s.Tags, FrameCount: len(frames), AnimationNames: names,
 	}, nil
+}
+
+// Slug is the filesystem-safe form of s.Name used in its directory name
+// and as the base name of its `pixel build` outputs.
+func (s Sprite) Slug() string { return slugify(s.Name) }
+
+// CleanOutDir validates and normalizes a sprite's Out subfolder: forward
+// slashes, no leading/trailing slash, and never absolute or escaping the
+// build folder via "..".
+func CleanOutDir(dir string) (string, error) {
+	dir = strings.TrimSpace(strings.ReplaceAll(dir, "\\", "/"))
+	if dir == "" {
+		return "", nil
+	}
+	if strings.HasPrefix(dir, "/") {
+		return "", fmt.Errorf("output folder %q must be relative to the build folder", dir)
+	}
+	clean := path.Clean(dir)
+	if clean == "." {
+		return "", nil
+	}
+	if clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf("output folder %q must stay inside the build folder", dir)
+	}
+	return clean, nil
 }
 
 // NormalizeID left-pads a sprite id with zeros to the canonical 4-digit
@@ -179,7 +209,7 @@ func slugify(name string) string {
 	lastDash := false
 	for _, r := range strings.ToLower(name) {
 		switch {
-		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
+		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_':
 			b.WriteRune(r)
 			lastDash = false
 		default:
@@ -269,6 +299,7 @@ func parseSpriteFile(path string) (*Sprite, error) {
 		Created:    created,
 		Updated:    updated,
 		DurationMS: duration,
+		Out:        fields["out"],
 		Path:       path,
 		Layers:     []LayerDef{},
 		Animations: []Animation{},
@@ -395,6 +426,9 @@ func (s Sprite) Save() error {
 	fmt.Fprintf(&b, "height: %d\n", s.Height)
 	fmt.Fprintf(&b, "tags: %s\n", strings.Join(s.Tags, ", "))
 	fmt.Fprintf(&b, "duration: %d\n", s.DurationMS)
+	if s.Out != "" {
+		fmt.Fprintf(&b, "out: %s\n", s.Out)
+	}
 	fmt.Fprintf(&b, "created: %s\n", s.Created.UTC().Format(time.RFC3339))
 	fmt.Fprintf(&b, "updated: %s\n", s.Updated.UTC().Format(time.RFC3339))
 	fmt.Fprintln(&b, "---")

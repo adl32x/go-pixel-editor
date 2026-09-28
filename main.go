@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,8 @@ func main() {
 		err = runShow(args)
 	case "export":
 		err = runExport(args)
+	case "build":
+		err = runBuild(args)
 	case "serve":
 		err = server.Run(args)
 	case "help", "--help", "-h":
@@ -68,8 +71,11 @@ Commands:
   show <id>                     Print one sprite's sprite.md in full
   export <id>                   Export a sprite
     --animation=<name>             (default: every animation row, in order)
-    --format=gif|sheet-json        (default: sheet-json)
+    --format=gif|sheet-json|sheet-grid (default: sheet-json)
     --out=<path>                   (default: .pixel/sprites/<id>-<slug>/export.<ext>)
+  build [id...]                 Render sprites to <slug>.png + <slug>.json
+    --out=<dir>                    (default: build_out in .pixel/settings.md;
+                                    one of the two is required)
   serve                          Open the browser-based canvas/timeline editor
     --port=NNNN                    (default: 7788)
     --no-open                      Don't launch the browser automatically
@@ -205,6 +211,35 @@ func runExport(args []string) error {
 		return err
 	}
 	fmt.Println("Wrote", out)
+	return nil
+}
+
+// runBuild renders sprites into the project's build folder (#0031). With no
+// ids it builds every sprite and also removes outputs of deleted sprites.
+func runBuild(args []string) error {
+	out := ""
+	var ids []string
+	for _, a := range args {
+		if strings.HasPrefix(a, "--out=") {
+			out = strings.TrimPrefix(a, "--out=")
+		} else {
+			ids = append(ids, a)
+		}
+	}
+	res, err := export.BuildProject(out, ids)
+	if err != nil {
+		return err
+	}
+	for _, n := range res.Written {
+		fmt.Println("wrote  ", filepath.Join(res.Out, n))
+	}
+	for _, n := range res.Removed {
+		fmt.Println("removed", filepath.Join(res.Out, n))
+	}
+	for _, id := range res.Skipped {
+		fmt.Printf("skipped sprite %s (no frames)\n", id)
+	}
+	fmt.Printf("%d written, %d unchanged, %d removed\n", len(res.Written), len(res.Unchanged), len(res.Removed))
 	return nil
 }
 
