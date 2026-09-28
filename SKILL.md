@@ -212,7 +212,8 @@ changes needed.
   parse/`Save`, `Load`/`Find`.
 - `internal/sprite/settings.go` — `Settings` (the project's single shared
   palette), `LoadSettings`/`Save`, `ColorToChar`/`CharToColor` (exact match
-  or nearest-by-RGB-distance, never allocates/errors).
+  or perceptually nearest by CIEDE2000 — see `colordist.go` — never
+  allocates/errors).
 - `internal/sprite/remap.go` — `RemapPalette`, the *only* supported way to
   change the palette: rewrites every sprite's every frame's pixel chars to
   the nearest color in the new palette before saving the new `Settings`.

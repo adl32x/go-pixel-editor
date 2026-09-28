@@ -90,7 +90,7 @@ func TestUpdateSpriteReslugsOnRename(t *testing.T) {
 // TestSettingsColorToCharExactAndNearest covers the project's single fixed
 // palette (see settings.go): an exact color match resolves to its char
 // without changing the palette, and an out-of-palette color snaps to the
-// nearest entry by RGB distance rather than allocating a new slot or
+// perceptually nearest entry rather than allocating a new slot or
 // erroring — a real behavior change from the old per-sprite append-only
 // scheme, where a brand new color always grew the palette.
 func TestSettingsColorToCharExactAndNearest(t *testing.T) {
@@ -110,8 +110,8 @@ func TestSettingsColorToCharExactAndNearest(t *testing.T) {
 		t.Fatalf("exact match char = %q, want '2'", ch)
 	}
 
-	// #e00000 (224,0,0) is much closer to pure red #ff0000 (distance 31²)
-	// than to black (distance 224²) or blue.
+	// #e00000 (224,0,0) is much closer to pure red #ff0000 than to black
+	// or blue.
 	ch, err = settings.ColorToChar("#e00000")
 	if err != nil {
 		t.Fatalf("nearest match: %v", err)

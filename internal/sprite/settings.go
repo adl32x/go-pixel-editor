@@ -2,6 +2,7 @@ package sprite
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -147,8 +148,8 @@ func (s Settings) Save() error {
 }
 
 // ColorToChar resolves color to a palette character: an exact match if the
-// project palette contains it, otherwise the nearest color by RGB distance
-// (see colorDistance). Unlike the old per-sprite append-only scheme, the
+// project palette contains it, otherwise the perceptually nearest color
+// (CIEDE2000, see colordist.go). Unlike the old per-sprite append-only scheme, the
 // palette itself is fixed here — drawing an out-of-palette color never adds
 // a new entry, it always snaps to whatever's closest, so this never fails as
 // long as the palette isn't empty.
@@ -156,14 +157,18 @@ func (s Settings) ColorToChar(color string) (rune, error) {
 	if len(s.Palette) == 0 {
 		return 0, fmt.Errorf("no palette loaded")
 	}
-	best := 0
-	bestDist := -1
-	for i, p := range s.Palette {
-		if p.Color == color {
+	// Exact matches first: drawing only ever sends palette colors, so the
+	// perceptual search below is just for imports and palette remaps.
+	for _, p := range s.Palette {
+		if strings.EqualFold(p.Color, color) {
 			return firstRune(p.Char), nil
 		}
+	}
+	best := 0
+	bestDist := math.Inf(1)
+	for i, p := range s.Palette {
 		d := colorDistance(color, p.Color)
-		if bestDist == -1 || d < bestDist {
+		if d < bestDist {
 			bestDist = d
 			best = i
 		}
@@ -180,21 +185,6 @@ func (s Settings) CharToColor(ch rune) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-// colorDistance is squared Euclidean distance in RGB space between two
-// "#rrggbb" colors — simple, no new dependency, good enough for a first cut
-// (see #0026 for a possible future perceptual-distance refinement). A
-// malformed color sorts as maximally distant rather than erroring, so a
-// single bad palette entry can't break every lookup.
-func colorDistance(a, b string) int {
-	ar, ag, ab, aok := parseHexColor(a)
-	br, bg, bb, bok := parseHexColor(b)
-	if !aok || !bok {
-		return 1 << 30
-	}
-	dr, dg, db := ar-br, ag-bg, ab-bb
-	return dr*dr + dg*dg + db*db
 }
 
 func parseHexColor(s string) (r, g, b int, ok bool) {

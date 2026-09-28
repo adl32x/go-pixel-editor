@@ -82,3 +82,9 @@ would be caught; and `TestRemapPaletteLeavesUntouchedFramesAlone` — a blank
 frame's file must not be rewritten if it has nothing to remap. Both pass
 under `go test -race`. Also verified live end-to-end through the browser
 (see #0025's done-note) with a real preset switch on a drawn sprite.
+
+**Update:** nearest-color matching is now perceptual — CIEDE2000 over
+CIELAB (`internal/sprite/colordist.go`), used by drawing, palette remaps and
+`pixel import`. Plain RGB distance visibly picked the wrong color when
+migrating the map_flame_game loading logo (a teal snapped to a muddy
+grey-green instead of the sage the eye reads as closest).
