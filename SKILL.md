@@ -115,6 +115,7 @@ pixel new "<name>" --width= --height= --tags=
 pixel show <id>                  # print one sprite's sprite.md in full
 pixel export <id> --animation= --format=gif|sheet-json|sheet-grid --out=
 pixel build [id...] --out=       # render sprites into the game's asset folder
+pixel import <sheet.json|png> --name= --out= --frame-width= --frame-height=
 pixel serve --port= --no-open    # browser-based canvas/timeline editor (default port 7788)
 pixel version / help
 ```
@@ -166,6 +167,26 @@ subfolder" field in the editor), so each sprite becomes
 - Two sprites building to the same path is an error.
 
 The same pair is available per sprite as the `sheet-grid` export format.
+
+## Importing existing art (`pixel import`)
+
+Creates a new sprite from art made elsewhere:
+
+- **A sheet JSON** — an Aseprite `json-array` export (`--split-layers`; the
+  animation name is the `(state)` token in each frame's `filename`) or our
+  own `pixel-sheet/1` — plus the PNG it names. Animation names, frame order
+  and durations carry over: the most common duration becomes the sprite
+  default, the rest become per-frame overrides.
+- **A bare PNG** — the whole image as one frame, or split into a grid with
+  `--frame-width`/`--frame-height`, one animation row per grid row
+  (`row1`, `row2`, …); fully transparent cells at the end of a row are
+  dropped.
+
+Colors snap to the nearest project palette color (the command warns with a
+count when any weren't exact); pixels under 50% alpha become empty. The
+sprite's build subfolder defaults to the source's folder under `build_out`,
+so importing `assets/images/characters/guy.json` then `pixel build` writes
+back to the same place. A failed import leaves no sprite behind.
 
 ## Configurable export
 

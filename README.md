@@ -39,6 +39,7 @@ pixel new <name>                 --width= --height= --tags=
 pixel show <id>                Print one sprite's sprite.md in full
 pixel export <id>                --animation= --format=gif|sheet-json|sheet-grid --out=
 pixel build [id...]              --out=   (or build_out: in .pixel/settings.md)
+pixel import <sheet.json|png>    --name= --out= --frame-width= --frame-height=
 pixel serve                      --port= --no-open
 pixel version / help
 ```

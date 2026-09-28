@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/adl32x/go-pixel-editor/internal/export"
+	"github.com/adl32x/go-pixel-editor/internal/importer"
 	"github.com/adl32x/go-pixel-editor/internal/server"
 	"github.com/adl32x/go-pixel-editor/internal/sprite"
 )
@@ -39,6 +40,8 @@ func main() {
 		err = runExport(args)
 	case "build":
 		err = runBuild(args)
+	case "import":
+		err = runImport(args)
 	case "serve":
 		err = server.Run(args)
 	case "help", "--help", "-h":
@@ -76,6 +79,11 @@ Commands:
   build [id...]                 Render sprites to <slug>.png + <slug>.json
     --out=<dir>                    (default: build_out in .pixel/settings.md;
                                     one of the two is required)
+  import <sheet.json|image.png> Create a sprite from existing art
+    --name=<name>                  (default: the file's base name)
+    --out=<subfolder>              (default: its folder under build_out)
+    --frame-width=N --frame-height=N  split a bare PNG into a grid
+                                   (default: the whole image is one frame)
   serve                          Open the browser-based canvas/timeline editor
     --port=NNNN                    (default: 7788)
     --no-open                      Don't launch the browser automatically
@@ -211,6 +219,50 @@ func runExport(args []string) error {
 		return err
 	}
 	fmt.Println("Wrote", out)
+	return nil
+}
+
+// runImport creates a sprite from existing art (#0010) — an Aseprite
+// json-array or pixel-sheet/1 JSON with its PNG, or a bare PNG.
+func runImport(args []string) error {
+	var opts importer.Options
+	var src string
+	for _, a := range args {
+		switch {
+		case strings.HasPrefix(a, "--name="):
+			opts.Name = strings.TrimPrefix(a, "--name=")
+		case strings.HasPrefix(a, "--out="):
+			opts.Out = strings.TrimPrefix(a, "--out=")
+		case strings.HasPrefix(a, "--frame-width="):
+			opts.FrameWidth, _ = strconv.Atoi(strings.TrimPrefix(a, "--frame-width="))
+		case strings.HasPrefix(a, "--frame-height="):
+			opts.FrameHeight, _ = strconv.Atoi(strings.TrimPrefix(a, "--frame-height="))
+		default:
+			src = a
+		}
+	}
+	if src == "" {
+		return fmt.Errorf("usage: pixel import <sheet.json|image.png> [--name=] [--out=] [--frame-width= --frame-height=]")
+	}
+	rep, err := importer.Import(src, opts)
+	if err != nil {
+		return err
+	}
+	s := rep.Sprite
+	names := make([]string, len(s.Animations))
+	for i, a := range s.Animations {
+		names[i] = fmt.Sprintf("%s (%d)", a.Name, len(a.Frames))
+	}
+	fmt.Printf("Created %s: %dx%d, %d frame(s), animations: %s\n", s.Path, s.Width, s.Height, rep.Frames, strings.Join(names, ", "))
+	if s.Out != "" {
+		fmt.Println("Builds into subfolder", s.Out)
+	}
+	if rep.InexactPixels > 0 {
+		fmt.Printf("warning: %d pixel(s) weren't palette colors and were snapped to the nearest one\n", rep.InexactPixels)
+	}
+	if rep.TranslucentPixels > 0 {
+		fmt.Printf("warning: %d pixel(s) had partial alpha (>= 50%% kept opaque, the rest dropped)\n", rep.TranslucentPixels)
+	}
 	return nil
 }
 

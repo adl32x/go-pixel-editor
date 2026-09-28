@@ -1,17 +1,17 @@
 ---
 id: 0010
 title: PNG import to new sprite
-status: todo
+status: done
 priority: medium
 tags: backend, import
 x: -73.98605153400912
 y: 205.62393301792352
 ---
 
-Import an existing PNG (e.g. reference art, or a sprite sheet exported from another
-tool) and convert it into a new sprite: decode with stdlib `image/png`, quantize/map
-pixels onto a new or existing palette (allocating chars via `Sprite.ColorToChar`,
-subject to the 62-color cap — see #0002's palette-overflow behavior), and write out as
-a single-frame sprite via the normal `Frame.Save` path. Exposed via CLI
-(`pixel import <file.png> --name=`) and optionally a web upload control. Not scoped for
-the initial pass.
+`pixel import <sheet.json|image.png>` (internal/importer). Imports an
+Aseprite json-array or pixel-sheet/1 sheet (keeping animation names and
+durations) or a bare PNG, optionally split into a grid, as a new sprite.
+Colors snap to the project's shared palette (there is no per-sprite palette
+to allocate into anymore), with a warning count for inexact pixels. The
+build subfolder is inferred from the source's location under build_out.
+CLI only; no web upload control yet. See SKILL.md "Importing existing art".
