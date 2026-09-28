@@ -336,6 +336,8 @@ export default function App() {
                 // Restart playback from the row's first frame on a row switch.
                 key={sprite.id + "/" + (animation?.name ?? "")}
                 spriteId={sprite.id}
+                width={sprite.width}
+                height={sprite.height}
                 animation={animation}
                 defaultDurationMs={sprite.durationMs}
                 selectedFrameId={frameId}

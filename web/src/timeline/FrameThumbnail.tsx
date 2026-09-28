@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { fitScale } from "../canvas/fitScale";
 import type { LayerProps } from "../types";
 
 interface FrameThumbnailProps {
@@ -15,6 +16,10 @@ export default function FrameThumbnail({
   size = 48,
 }: FrameThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Keep the sprite's aspect ratio inside the size x size slot.
+  const scale = fitScale(width, height, size);
+  const canvasWidth = Math.max(1, Math.round(width * scale));
+  const canvasHeight = Math.max(1, Math.round(height * scale));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -41,14 +46,16 @@ export default function FrameThumbnail({
         }
       }
     }
-  }, [layers, width, height]);
+  }, [layers, width, height, canvasWidth, canvasHeight]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={size}
-      height={size}
-      className="frame-thumbnail"
-    />
+    <span className="frame-thumbnail-slot" style={{ width: size, height: size }}>
+      <canvas
+        ref={canvasRef}
+        width={canvasWidth}
+        height={canvasHeight}
+        className="frame-thumbnail"
+      />
+    </span>
   );
 }

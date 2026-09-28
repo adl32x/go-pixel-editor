@@ -379,9 +379,7 @@ a {
 }
 
 .preview-panel-image {
-  position: relative;
-  width: 128px;
-  height: 128px;
+  position: relative; /* size set inline from the sprite's aspect ratio */
 }
 
 .preview-panel-image img {
@@ -638,9 +636,14 @@ a {
   align-self: flex-start;
 }
 
+.frame-thumbnail-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .frame-thumbnail {
-  width: 48px;
-  height: 48px;
+  display: block;
   border-radius: 4px;
   border: 1px solid var(--mac-border);
   image-rendering: pixelated;

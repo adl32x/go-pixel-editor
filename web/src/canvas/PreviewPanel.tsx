@@ -1,9 +1,15 @@
 import { useEffect, useState } from "react";
 import { exportFramePngUrl } from "../api";
 import type { Animation } from "../types";
+import { fitScale } from "./fitScale";
+
+// The preview's longest side, in CSS pixels.
+const PREVIEW_BOX = 128;
 
 interface PreviewPanelProps {
   spriteId: string;
+  width: number;
+  height: number;
   animation: Animation | null;
   defaultDurationMs: number;
   selectedFrameId: string | null;
@@ -21,6 +27,8 @@ interface PreviewPanelProps {
 // it a still composite preview of the frame being edited.
 export default function PreviewPanel({
   spriteId,
+  width,
+  height,
   animation,
   defaultDurationMs,
   selectedFrameId,
@@ -37,6 +45,7 @@ export default function PreviewPanel({
       ? selectedIndex
       : 0;
   const current = frames[shown];
+  const scale = fitScale(width, height, PREVIEW_BOX);
   const durationMs = current?.durationMs ?? defaultDurationMs;
 
   useEffect(() => {
@@ -61,7 +70,10 @@ export default function PreviewPanel({
           {playing ? "Pause" : "Play"}
         </button>
       </div>
-      <div className="dotting-canvas-checkerboard preview-panel-image">
+      <div
+        className="dotting-canvas-checkerboard preview-panel-image"
+        style={{ width: width * scale, height: height * scale }}
+      >
         {/* Every frame of the row is mounted at once (only one visible) so
             they're all loaded up front and playback never flickers on a
             not-yet-fetched image. */}
