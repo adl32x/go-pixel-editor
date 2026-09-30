@@ -116,7 +116,12 @@ export default function App() {
     })();
   }, [spriteId]);
 
-  async function handleCreateSprite(input: { name: string; width: number; height: number }) {
+  async function handleCreateSprite(input: {
+    name: string;
+    width: number;
+    height: number;
+    tags?: string;
+  }) {
     const created = await api.createSprite(input);
     await api.addFrame(created.id);
     await refreshSprites();

@@ -808,3 +808,52 @@ a {
   border-color: var(--mac-accent);
   color: #fff;
 }
+
+/* -- sprite tag cloud (sidebar filter) -- */
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.tag-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  line-height: 1.5;
+  background: var(--mac-panel-bg);
+  box-shadow: none;
+}
+
+.tag-chip.selected {
+  background: var(--mac-accent);
+  border-color: var(--mac-accent);
+  color: #fff;
+}
+
+.tag-chip.untagged {
+  font-style: italic;
+  font-size: 11px;
+}
+
+.tag-chip-count {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.tag-cloud-clear {
+  padding: 1px 6px;
+  font-size: 11px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--mac-accent);
+}
+
+.tag-cloud-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--mac-text-secondary);
+}
