@@ -413,3 +413,61 @@ func TestToLayerPropsFromLayerPropsRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestDuplicateAnimation(t *testing.T) {
+	s, _, _ := setupFourByFour(t)
+	if _, err := AddAnimation(&s, "walk"); err != nil {
+		t.Fatal(err)
+	}
+	w1, _ := AddFrame(&s, "walk")
+	w2, _ := AddFrame(&s, "walk")
+	if _, err := AddAnimation(&s, "jump"); err != nil {
+		t.Fatal(err)
+	}
+	w1.Layers["L1"][0] = []rune("1..1")
+	if err := w1.Save(s); err != nil {
+		t.Fatal(err)
+	}
+	d := 250
+	frames := []AnimFrame{{FrameID: w1.ID}, {FrameID: w2.ID, DurationMS: &d}}
+	if _, err := UpdateAnimation(&s, "walk", AnimationPatch{Frames: &frames}); err != nil {
+		t.Fatal(err)
+	}
+
+	dup, err := DuplicateAnimation(&s, "walk")
+	if err != nil {
+		t.Fatalf("DuplicateAnimation: %v", err)
+	}
+	if dup.Name != "walk copy" {
+		t.Fatalf("name = %q, want walk copy", dup.Name)
+	}
+	if again, _ := DuplicateAnimation(&s, "walk"); again.Name != "walk copy 2" {
+		t.Fatalf("second copy name = %q, want walk copy 2", again.Name)
+	}
+
+	reloaded, _ := Find(s.ID)
+	var names []string
+	for _, a := range reloaded.Animations {
+		names = append(names, a.Name)
+	}
+	if strings.Join(names, ",") != "default,walk,walk copy 2,walk copy,jump" {
+		t.Fatalf("rows = %v, want each copy directly below walk", names)
+	}
+	cp := reloaded.Animations[reloaded.FindAnimation("walk copy")]
+	if len(cp.Frames) != 2 || cp.Frames[0].FrameID == w1.ID || cp.Frames[1].FrameID == w2.ID {
+		t.Fatalf("copy frames = %+v, want two new frame ids", cp.Frames)
+	}
+	if cp.Frames[1].DurationMS == nil || *cp.Frames[1].DurationMS != 250 || cp.Frames[0].DurationMS != nil {
+		t.Fatalf("copy durations = %+v, want [default, 250]", cp.Frames)
+	}
+	f, _ := FindFrame(*reloaded, cp.Frames[0].FrameID)
+	if got := string(f.Layers["L1"][0]); got != "1..1" {
+		t.Fatalf("copied pixels row 0 = %q, want 1..1", got)
+	}
+	// The copy is independent: editing it leaves the original alone.
+	f.Layers["L1"][0] = []rune("....")
+	_ = f.Save(*reloaded)
+	if orig, _ := FindFrame(*reloaded, w1.ID); string(orig.Layers["L1"][0]) != "1..1" {
+		t.Fatal("editing the copy changed the original frame")
+	}
+}

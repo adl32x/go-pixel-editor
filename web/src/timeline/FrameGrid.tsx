@@ -194,6 +194,17 @@ export default function FrameGrid({
     patchFrames(anim, frames);
   }
 
+  // Selects the new copy (the row right below the original) and its first
+  // frame, so the next edit lands on the copy rather than the original.
+  async function handleDuplicateAnimation(anim: Animation) {
+    const updated = await run(() => api.duplicateAnimation(sprite.id, anim.name));
+    if (!updated) return;
+    const copy = updated.animations[updated.animations.findIndex((a) => a.name === anim.name) + 1];
+    if (!copy) return;
+    onSelectAnimation(copy.name);
+    if (copy.frames.length > 0) onSelectFrame(copy.frames[0].frameId);
+  }
+
   function handleDeleteAnimation(anim: Animation) {
     const n = anim.frames.length;
     if (n > 0 && !confirm(`Delete "${anim.name}" and its ${n} frame(s)?`)) return;
@@ -273,6 +284,16 @@ export default function FrameGrid({
                 >
                   Export
                 </a>
+                <button
+                  type="button"
+                  title="Copy this animation, frames and all, into a new row below"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDuplicateAnimation(anim);
+                  }}
+                >
+                  Duplicate
+                </button>
                 <button
                   type="button"
                   title="Delete animation and its frames"

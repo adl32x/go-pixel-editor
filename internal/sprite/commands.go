@@ -491,26 +491,8 @@ func DuplicateFrame(s *Sprite, frameID string) (Frame, error) {
 	if row < 0 {
 		return Frame{}, fmt.Errorf("no frame %s", frameID)
 	}
-	src, err := FindFrame(*s, frameID)
+	f, err := copyFrameFile(*s, frameID)
 	if err != nil {
-		return Frame{}, err
-	}
-	if src == nil {
-		return Frame{}, fmt.Errorf("no frame %s", frameID)
-	}
-	id, err := nextFrameID(*s)
-	if err != nil {
-		return Frame{}, err
-	}
-	f := Frame{ID: id, Layers: map[string][][]rune{}}
-	for layerID, grid := range src.Layers {
-		cp := make([][]rune, len(grid))
-		for r, rowRunes := range grid {
-			cp[r] = append([]rune(nil), rowRunes...)
-		}
-		f.Layers[layerID] = cp
-	}
-	if err := f.Save(*s); err != nil {
 		return Frame{}, err
 	}
 
@@ -519,12 +501,7 @@ func DuplicateFrame(s *Sprite, frameID string) (Frame, error) {
 	for _, af := range frames {
 		out = append(out, af)
 		if af.FrameID == frameID {
-			dup := AnimFrame{FrameID: id}
-			if af.DurationMS != nil {
-				ms := *af.DurationMS
-				dup.DurationMS = &ms
-			}
-			out = append(out, dup)
+			out = append(out, copyAnimFrame(af, f.ID))
 		}
 	}
 	s.Animations[row].Frames = out
@@ -532,4 +509,75 @@ func DuplicateFrame(s *Sprite, frameID string) (Frame, error) {
 		return Frame{}, err
 	}
 	return f, nil
+}
+
+// copyFrameFile writes a copy of frame srcID's pixels (every layer) under
+// the next never-reused frame id and returns it. It doesn't place the copy
+// in any animation row — callers do that, then save sprite.md.
+func copyFrameFile(s Sprite, srcID string) (Frame, error) {
+	src, err := FindFrame(s, srcID)
+	if err != nil {
+		return Frame{}, err
+	}
+	if src == nil {
+		return Frame{}, fmt.Errorf("no frame %s", srcID)
+	}
+	id, err := nextFrameID(s)
+	if err != nil {
+		return Frame{}, err
+	}
+	f := Frame{ID: id, Layers: map[string][][]rune{}}
+	for layerID, grid := range src.Layers {
+		cp := make([][]rune, len(grid))
+		for r, row := range grid {
+			cp[r] = append([]rune(nil), row...)
+		}
+		f.Layers[layerID] = cp
+	}
+	return f, f.Save(s)
+}
+
+// copyAnimFrame is af's grid cell pointing at frame id instead, with its
+// own copy of any duration override.
+func copyAnimFrame(af AnimFrame, id string) AnimFrame {
+	dup := AnimFrame{FrameID: id}
+	if af.DurationMS != nil {
+		ms := *af.DurationMS
+		dup.DurationMS = &ms
+	}
+	return dup
+}
+
+// DuplicateAnimation copies the animation row named name — every frame
+// duplicated (pixels and duration overrides) into new frames — into a new
+// row directly below it, named "<name> copy" ("<name> copy 2", … if that's
+// taken). Frame files are written before sprite.md, as in AddFrame.
+func DuplicateAnimation(s *Sprite, name string) (Animation, error) {
+	i := s.FindAnimation(name)
+	if i < 0 {
+		return Animation{}, fmt.Errorf("no animation named %q", name)
+	}
+	copyName := name + " copy"
+	for n := 2; s.FindAnimation(copyName) >= 0; n++ {
+		copyName = fmt.Sprintf("%s copy %d", name, n)
+	}
+
+	dup := Animation{Name: copyName, Frames: []AnimFrame{}}
+	for _, af := range s.Animations[i].Frames {
+		f, err := copyFrameFile(*s, af.FrameID)
+		if err != nil {
+			return Animation{}, err
+		}
+		dup.Frames = append(dup.Frames, copyAnimFrame(af, f.ID))
+	}
+
+	anims := make([]Animation, 0, len(s.Animations)+1)
+	anims = append(anims, s.Animations[:i+1]...)
+	anims = append(anims, dup)
+	anims = append(anims, s.Animations[i+1:]...)
+	s.Animations = anims
+	if err := s.Save(); err != nil {
+		return Animation{}, err
+	}
+	return dup, nil
 }

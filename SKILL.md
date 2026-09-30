@@ -137,6 +137,9 @@ browser tab with two views, switched via a sidebar nav:
   Frames hold for the sprite's default duration unless overridden per frame.
   Drag a frame to reorder it or move it to another row; the `+` badge on a
   frame duplicates it (pixels and duration override) right after itself.
+  A row's **Duplicate** button copies the whole animation — every frame
+  duplicated into new frames — into a new row right below it
+  ("walk copy").
 - **Settings**: the project's palette editor. Pick a built-in preset or edit
   individual colors (add/remove/reorder), then apply — this remaps every
   sprite's existing pixels to the nearest matching color in the new palette

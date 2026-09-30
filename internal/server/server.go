@@ -68,6 +68,7 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("POST /api/sprites/{id}/animations", tracked(handleCreateAnimation))
 	mux.HandleFunc("PATCH /api/sprites/{id}/animations/{name}", tracked(handlePatchAnimation))
 	mux.HandleFunc("DELETE /api/sprites/{id}/animations/{name}", tracked(handleDeleteAnimation))
+	mux.HandleFunc("POST /api/sprites/{id}/animations/{name}/duplicate", tracked(handleDuplicateAnimation))
 
 	// Sprite-changing routes above are wrapped in tracked(), which records
 	// an undo step for each (see history.go).
@@ -423,6 +424,20 @@ func handlePatchAnimation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := sprite.UpdateAnimation(s, r.PathValue("name"), patch); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeSprite(w, *s)
+}
+
+// handleDuplicateAnimation copies a row, frames and all, into a new row
+// directly below it (see sprite.DuplicateAnimation).
+func handleDuplicateAnimation(w http.ResponseWriter, r *http.Request) {
+	s := findSprite(w, r.PathValue("id"))
+	if s == nil {
+		return
+	}
+	if _, err := sprite.DuplicateAnimation(s, r.PathValue("name")); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}

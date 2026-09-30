@@ -190,6 +190,14 @@ export function patchAnimation(
   });
 }
 
+// Copies the row, frames and all, into a new row right below it named
+// "<name> copy".
+export function duplicateAnimation(spriteId: string, name: string): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/animations/${encodeURIComponent(name)}/duplicate`, {
+    method: "POST",
+  });
+}
+
 // Deletes the row *and every frame in it*.
 export function deleteAnimation(spriteId: string, name: string): Promise<Sprite> {
   return request(`/sprites/${spriteId}/animations/${encodeURIComponent(name)}`, {
