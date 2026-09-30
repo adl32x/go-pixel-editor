@@ -9,14 +9,20 @@ import type {
   SpritePatch,
   SpriteSummary,
 } from "./types";
+import { recordHistoryHeader } from "./state/history";
 
 const BASE = "/api";
+
+// Requests about one sprite carry its undo/redo depth back in a header.
+const SPRITE_PATH = /^\/sprites\/(\d+)(\/|$)/;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
+  const spriteId = SPRITE_PATH.exec(path)?.[1];
+  if (spriteId) recordHistoryHeader(spriteId, res.headers.get("X-Pixel-History"));
   if (!res.ok) {
     let message = res.statusText;
     try {
@@ -124,6 +130,24 @@ export function resizeSprite(
     method: "POST",
     body: JSON.stringify({ width, height, anchor }),
   });
+}
+
+// -- undo / redo -------------------------------------------------------------
+// Steps the sprite back or forward one change (see
+// internal/server/history.go). changedFrames are the frames that step
+// touched, so the editor can show one if the frame on screen wasn't.
+
+export interface HistoryStep {
+  sprite: Sprite;
+  changedFrames: string[];
+}
+
+export function undo(spriteId: string): Promise<HistoryStep> {
+  return request(`/sprites/${spriteId}/undo`, { method: "POST" });
+}
+
+export function redo(spriteId: string): Promise<HistoryStep> {
+  return request(`/sprites/${spriteId}/redo`, { method: "POST" });
 }
 
 // -- layers ----------------------------------------------------------------

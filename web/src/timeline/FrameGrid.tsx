@@ -11,6 +11,8 @@ interface FrameGridProps {
   // Bumped after every pixel save — the selected frame's thumbnail is
   // re-fetched when it changes (other frames can't have changed).
   version: number;
+  // Changes when every thumbnail may be stale (undo/redo).
+  reloadKey: number;
   onSelectFrame: (frameId: string) => void;
   onSelectAnimation: (name: string) => void;
   onSpriteChanged: (sprite: Sprite) => void;
@@ -23,6 +25,7 @@ export default function FrameGrid({
   selectedFrameId,
   selectedAnimation,
   version,
+  reloadKey,
   onSelectFrame,
   onSelectAnimation,
   onSpriteChanged,
@@ -67,7 +70,7 @@ export default function FrameGrid({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // Size too: a resize rewrites every frame without changing any frame id.
-  }, [sprite.id, frameIdsKey, sprite.width, sprite.height]);
+  }, [sprite.id, frameIdsKey, sprite.width, sprite.height, reloadKey]);
 
   useEffect(() => {
     if (version === 0 || !selectedFrameId) return;

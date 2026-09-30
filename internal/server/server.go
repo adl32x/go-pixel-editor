@@ -35,27 +35,44 @@ func Run(args []string) error {
 		}
 	}
 
+	mux := newMux()
+
+	url := fmt.Sprintf("http://localhost:%s", port)
+	fmt.Println("pixel serve listening on", url)
+	if open {
+		openBrowser(url)
+	}
+	return http.ListenAndServe(":"+port, mux)
+}
+
+// newMux wires every API route plus the embedded SPA.
+func newMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/sprites", handleListSprites)
 	mux.HandleFunc("POST /api/sprites", handleCreateSprite)
 	mux.HandleFunc("GET /api/sprites/{id}", handleGetSprite)
-	mux.HandleFunc("PATCH /api/sprites/{id}", handlePatchSprite)
+	mux.HandleFunc("PATCH /api/sprites/{id}", tracked(handlePatchSprite))
 	mux.HandleFunc("DELETE /api/sprites/{id}", handleDeleteSprite)
 
-	mux.HandleFunc("POST /api/sprites/{id}/frames", handleAddFrame)
+	mux.HandleFunc("POST /api/sprites/{id}/frames", tracked(handleAddFrame))
 	mux.HandleFunc("GET /api/sprites/{id}/frames/{frameId}", handleGetFrame)
-	mux.HandleFunc("PUT /api/sprites/{id}/frames/{frameId}", handlePutFrame)
-	mux.HandleFunc("DELETE /api/sprites/{id}/frames/{frameId}", handleDeleteFrame)
-	mux.HandleFunc("POST /api/sprites/{id}/frames/{frameId}/move", handleMoveFrame)
-	mux.HandleFunc("POST /api/sprites/{id}/frames/{frameId}/duplicate", handleDuplicateFrame)
+	mux.HandleFunc("PUT /api/sprites/{id}/frames/{frameId}", tracked(handlePutFrame))
+	mux.HandleFunc("DELETE /api/sprites/{id}/frames/{frameId}", tracked(handleDeleteFrame))
+	mux.HandleFunc("POST /api/sprites/{id}/frames/{frameId}/move", tracked(handleMoveFrame))
+	mux.HandleFunc("POST /api/sprites/{id}/frames/{frameId}/duplicate", tracked(handleDuplicateFrame))
 
-	mux.HandleFunc("POST /api/sprites/{id}/resize", handleResizeSprite)
-	mux.HandleFunc("POST /api/sprites/{id}/layers", handleAddLayer)
-	mux.HandleFunc("DELETE /api/sprites/{id}/layers/{layerId}", handleDeleteLayer)
+	mux.HandleFunc("POST /api/sprites/{id}/resize", tracked(handleResizeSprite))
+	mux.HandleFunc("POST /api/sprites/{id}/layers", tracked(handleAddLayer))
+	mux.HandleFunc("DELETE /api/sprites/{id}/layers/{layerId}", tracked(handleDeleteLayer))
 
-	mux.HandleFunc("POST /api/sprites/{id}/animations", handleCreateAnimation)
-	mux.HandleFunc("PATCH /api/sprites/{id}/animations/{name}", handlePatchAnimation)
-	mux.HandleFunc("DELETE /api/sprites/{id}/animations/{name}", handleDeleteAnimation)
+	mux.HandleFunc("POST /api/sprites/{id}/animations", tracked(handleCreateAnimation))
+	mux.HandleFunc("PATCH /api/sprites/{id}/animations/{name}", tracked(handlePatchAnimation))
+	mux.HandleFunc("DELETE /api/sprites/{id}/animations/{name}", tracked(handleDeleteAnimation))
+
+	// Sprite-changing routes above are wrapped in tracked(), which records
+	// an undo step for each (see history.go).
+	mux.HandleFunc("POST /api/sprites/{id}/undo", handleUndo)
+	mux.HandleFunc("POST /api/sprites/{id}/redo", handleRedo)
 
 	mux.HandleFunc("GET /api/sprites/{id}/export.png", handleExportPNG)
 	mux.HandleFunc("GET /api/sprites/{id}/export", handleExport)
@@ -69,13 +86,7 @@ func Run(args []string) error {
 	mux.HandleFunc("GET /api/palette-presets/{id}", handleGetPalettePreset)
 
 	mux.Handle("/", staticHandler())
-
-	url := fmt.Sprintf("http://localhost:%s", port)
-	fmt.Println("pixel serve listening on", url)
-	if open {
-		openBrowser(url)
-	}
-	return http.ListenAndServe(":"+port, mux)
+	return mux
 }
 
 // spriteResponse adds a flat, grid-ordered frame id list to a Sprite for
@@ -152,6 +163,10 @@ func handleGetSprite(w http.ResponseWriter, r *http.Request) {
 	if s == nil {
 		return
 	}
+	// So the editor knows the undo/redo depth as soon as it opens a sprite.
+	history.mu.Lock()
+	setHistoryHeader(w, s.ID)
+	history.mu.Unlock()
 	writeSprite(w, *s)
 }
 

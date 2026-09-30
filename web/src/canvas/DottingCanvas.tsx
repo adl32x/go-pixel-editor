@@ -12,6 +12,10 @@ import type { LayerDef } from "../types";
 export interface DottingCanvasHandle {
   loadLayers: (layers: LayerProps[]) => void;
   getLayers: () => LayerProps[];
+  // Saves a stroke still waiting out the autosave debounce right away —
+  // undo calls this first, or the late save would land after the undo
+  // and silently redo the stroke.
+  flush: () => Promise<void>;
 }
 
 interface DottingCanvasProps {
@@ -35,7 +39,7 @@ interface DottingCanvasProps {
   // source), so it can only ever be applied to flattened output (exports,
   // the preview thumbnail), never previewed live on this canvas.
   layers: LayerDef[];
-  onChange: (layers: LayerProps[]) => void;
+  onChange: (layers: LayerProps[]) => void | Promise<void>;
 }
 
 // Converts dotting's own sparse per-layer change payload (a
@@ -117,6 +121,8 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
     // initLayers would keep producing the *old* layer set forever, silently
     // dropping the new/removed layer's data from every subsequent save.
     const layerIdsRef = useRef(initLayers.map((l) => l.id));
+    // The debounced autosave, if one is waiting (see the change listener).
+    const pendingSaveRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const gridWidth = initLayers[0]?.data[0]?.length ?? width;
     const gridHeight = initLayers[0]?.data.length ?? height;
 
@@ -184,6 +190,12 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
         getLayers(): LayerProps[] {
           return currentLayersArray();
         },
+        async flush() {
+          if (pendingSaveRef.current === undefined) return;
+          clearTimeout(pendingSaveRef.current);
+          pendingSaveRef.current = undefined;
+          await onChangeRef.current(currentLayersArray());
+        },
       }),
       [],
     );
@@ -223,7 +235,6 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
       const ref = dottingRef.current;
       if (!ref) return;
 
-      let timeout: ReturnType<typeof setTimeout> | undefined;
       const handleChange = (params: CanvasDataChangeParams) => {
         layersRef.current.set(
           params.layerId,
@@ -240,15 +251,16 @@ const DottingCanvas = forwardRef<DottingCanvasHandle, DottingCanvasProps>(
         // eventually fire) a save of empty data over real content. Only
         // schedule a save for changes the user actually made.
         if (!params.isLocalChange) return;
-        if (timeout) clearTimeout(timeout);
-        timeout = setTimeout(() => {
+        if (pendingSaveRef.current) clearTimeout(pendingSaveRef.current);
+        pendingSaveRef.current = setTimeout(() => {
+          pendingSaveRef.current = undefined;
           onChangeRef.current(currentLayersArray());
         }, 400);
       };
 
       ref.addDataChangeListener(handleChange);
       return () => {
-        if (timeout) clearTimeout(timeout);
+        if (pendingSaveRef.current) clearTimeout(pendingSaveRef.current);
         try {
           ref.removeDataChangeListener(handleChange);
         } catch {

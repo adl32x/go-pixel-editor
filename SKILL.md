@@ -169,6 +169,19 @@ subfolder" field in the editor), so each sprite becomes
 
 The same pair is available per sprite as the `sheet-grid` export format.
 
+## Undo / redo (editor)
+
+**Undo**/**Redo** in the tool panel, or ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y). Every
+change to a sprite is one step — a stroke (one autosave), a resize, adding
+or deleting frames, animations or layers, a rename or setting change. The
+server snapshots the sprite's files before each change and undo restores
+them (`internal/server/history.go`), so any kind of edit undoes the same
+way. A stroke still waiting to autosave is saved before undoing; if the
+step changed a different frame than the one on screen, the editor jumps to
+it. History is per sprite, 100 steps, and lasts while `pixel serve` runs —
+older history is git's job. Palette changes and deleting a whole sprite
+aren't undoable here.
+
 ## Resizing the canvas (`pixel resize`, or Resize in the editor)
 
 Changes a sprite's width/height across every layer of every frame.

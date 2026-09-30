@@ -13,6 +13,7 @@ import PaletteSettings from "./settings/PaletteSettings";
 import SpriteList from "./sprites/SpriteList";
 import SpriteMeta from "./sprites/SpriteMeta";
 import FrameGrid from "./timeline/FrameGrid";
+import { useHistoryCounts } from "./state/history";
 import type { LayerProps, Settings, Sprite, SpriteSummary } from "./types";
 
 const EMPTY_LAYERS: LayerProps[] = [];
@@ -47,6 +48,10 @@ export default function App() {
   // PreviewPanel.tsx and DottingCanvas's `layers` prop.
   const [previewVersion, setPreviewVersion] = useState(0);
   const bumpPreview = useCallback(() => setPreviewVersion((v) => v + 1), []);
+  // Bumped by undo/redo, which can change any frame's pixels without
+  // changing any frame id — tells FrameGrid to re-fetch every thumbnail.
+  const [gridReload, setGridReload] = useState(0);
+  const historyCounts = useHistoryCounts(spriteId);
   const canvasRef = useRef<DottingCanvasHandle>(null);
 
   const refreshSprites = useCallback(async () => {
@@ -183,6 +188,76 @@ export default function App() {
     bumpPreview();
   }
 
+  // Undo/redo restore a whole earlier state of the sprite server-side (see
+  // internal/server/history.go), so afterwards anything may differ: pixels,
+  // frames, size, layers, name. Any stroke still in the autosave debounce is
+  // saved first — otherwise it would land after the undo and redo itself.
+  // The canvas then shows the frame the step changed, if the current one
+  // wasn't touched (or no longer exists).
+  const historyBusyRef = useRef(false);
+  async function handleHistoryStep(direction: "undo" | "redo") {
+    if (!spriteId || historyBusyRef.current) return;
+    historyBusyRef.current = true;
+    try {
+      await canvasRef.current?.flush();
+      let step: api.HistoryStep;
+      try {
+        step = await (direction === "undo" ? api.undo(spriteId) : api.redo(spriteId));
+      } catch {
+        return; // nothing to undo/redo — the buttons just hadn't caught up
+      }
+      const updated = step.sprite;
+      const touched = step.changedFrames.filter((id) => updated.frameIds.includes(id));
+      let target = frameId && updated.frameIds.includes(frameId) ? frameId : null;
+      if (touched.length > 0 && (!target || !touched.includes(target))) target = touched[0];
+      if (!target) target = updated.frameIds[0] ?? null;
+
+      const layers = target ? await api.getFrame(spriteId, target) : EMPTY_LAYERS;
+      // Same size and layer set: the mounted canvas can take the data
+      // directly. Otherwise its key changes and it remounts from
+      // initLayers (dotting can't be reshaped in place).
+      const sameShape =
+        sprite !== null &&
+        sprite.width === updated.width &&
+        sprite.height === updated.height &&
+        sprite.layers.map((l) => l.id).join() === updated.layers.map((l) => l.id).join();
+      setSprite(updated);
+      setFrameId(target);
+      setInitLayers(layers);
+      if (sameShape && layers.length > 0) canvasRef.current?.loadLayers(layers);
+      if (!updated.layers.some((l) => l.id === activeLayerId)) {
+        setActiveLayerId(updated.layers[0]?.id ?? "");
+      }
+      refreshSprites();
+      bumpPreview();
+      setGridReload((n) => n + 1);
+    } finally {
+      historyBusyRef.current = false;
+    }
+  }
+
+  // ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y elsewhere) — except while typing in a field,
+  // where the browser's own text undo should win.
+  const historyStepRef = useRef(handleHistoryStep);
+  historyStepRef.current = handleHistoryStep;
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      const key = e.key.toLowerCase();
+      if (key === "z") {
+        e.preventDefault();
+        historyStepRef.current(e.shiftKey ? "redo" : "undo");
+      } else if (key === "y") {
+        e.preventDefault();
+        historyStepRef.current("redo");
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   async function handleLayersChange(layers: Sprite["layers"]) {
     if (!spriteId) return;
     await api.patchSprite(spriteId, { layers });
@@ -312,7 +387,14 @@ export default function App() {
                 onSelectColor={setBrushColor}
               />
 
-              <Toolbar tool={brushTool} onSelectTool={setBrushTool} />
+              <Toolbar
+                tool={brushTool}
+                onSelectTool={setBrushTool}
+                canUndo={historyCounts.undo > 0}
+                canRedo={historyCounts.redo > 0}
+                onUndo={() => handleHistoryStep("undo")}
+                onRedo={() => handleHistoryStep("redo")}
+              />
 
               {initLayers.length > 0 ? (
                 <DottingCanvas
@@ -377,6 +459,7 @@ export default function App() {
               selectedFrameId={frameId}
               selectedAnimation={animationName}
               version={previewVersion}
+              reloadKey={gridReload}
               onSelectFrame={selectFrame}
               onSelectAnimation={handleSelectAnimation}
               onSpriteChanged={handleGridSpriteChanged}

@@ -3,7 +3,14 @@ import { BrushTool } from "./DottingCanvas";
 interface ToolbarProps {
   tool: BrushTool;
   onSelectTool: (tool: BrushTool) => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 }
+
+// Shown in tooltips; the shortcuts themselves are handled in App.
+const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
 
 // BrushTool.NONE is dotting's "nothing selected, just pan" mode — not a
 // drawing tool a user would deliberately pick from a toolbar, and panning is
@@ -22,10 +29,30 @@ const TOOLS: Array<{ tool: BrushTool; label: string }> = [
   { tool: BrushTool.ELLIPSE_FILLED, label: "Ellipse (filled)" },
 ];
 
-export default function Toolbar({ tool, onSelectTool }: ToolbarProps) {
+export default function Toolbar({
+  tool,
+  onSelectTool,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
+}: ToolbarProps) {
   return (
     <div className="toolbar">
       <h3>Tools</h3>
+      <div className="toolbar-history">
+        <button type="button" disabled={!canUndo} title={`Undo (${MOD}Z)`} onClick={onUndo}>
+          Undo
+        </button>
+        <button
+          type="button"
+          disabled={!canRedo}
+          title={`Redo (${MOD === "⌘" ? "⇧⌘Z" : "Ctrl+Y"})`}
+          onClick={onRedo}
+        >
+          Redo
+        </button>
+      </div>
       <div className="toolbar-buttons">
         {TOOLS.map((t) => (
           <button

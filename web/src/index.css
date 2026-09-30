@@ -780,3 +780,15 @@ a {
   border-color: var(--mac-accent);
   color: #fff;
 }
+
+.toolbar-history {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.toolbar-history button {
+  flex: 1;
+  padding: 3px 6px;
+  font-size: 11px;
+}
