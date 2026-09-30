@@ -792,3 +792,19 @@ a {
   padding: 3px 6px;
   font-size: 11px;
 }
+
+.layer-overlay {
+  padding: 1px 6px;
+  font-size: 10px;
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mac-text-secondary);
+}
+
+.layer-overlay.on {
+  background: var(--mac-accent);
+  border-color: var(--mac-accent);
+  color: #fff;
+}

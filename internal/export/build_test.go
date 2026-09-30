@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/adl32x/go-pixel-editor/internal/sprite"
@@ -194,5 +195,90 @@ func TestBuildIntoSpriteSubfolders(t *testing.T) {
 	}
 	if len(res.Removed) != 2 {
 		t.Fatalf("removed = %v, want the two monsters_gen/ files", res.Removed)
+	}
+}
+
+func TestBuildOverlayLayers(t *testing.T) {
+	_, _, settings := testSprite(t) // "eye" is unused here
+	guy, err := sprite.NewSprite("guy", 2, 2, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, _ := sprite.AddFrame(&guy, "")
+	if _, err := sprite.AddLayer(&guy, "Sword"); err != nil {
+		t.Fatal(err)
+	}
+	sword := guy.Layers[0]
+	sword.Overlay = true
+	sword.Visible = false // hidden while editing must not drop it from the build
+	layers := []sprite.LayerDef{sword, guy.Layers[1]}
+	if _, err := sprite.UpdateSprite(guy.ID, sprite.SpritePatch{Layers: &layers}); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, _ := sprite.Find(guy.ID)
+	fr, _ := sprite.FindFrame(*reloaded, f.ID)
+	body := string(settings.Palette[0].Char)
+	blade := string(settings.Palette[1].Char)
+	fr.Layers[reloaded.Layers[1].ID] = [][]rune{[]rune(body + "."), []rune("..")} // body: top-left
+	fr.Layers[sword.ID] = [][]rune{[]rune(".."), []rune("." + blade)}          // sword: bottom-right
+	if err := fr.Save(*reloaded); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Build([]sprite.Sprite{*reloaded}, "out", settings, true)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	want := []string{"guy.json", "guy.png", "guy.sword.json", "guy.sword.png"}
+	if !reflect.DeepEqual(res.Written, want) {
+		t.Fatalf("written = %v, want %v", res.Written, want)
+	}
+
+	opaque := func(name string, x, y int) bool {
+		raw, _ := os.ReadFile("out/" + name)
+		img, err := png.Decode(bytes.NewReader(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _, _, a := img.At(x, y).RGBA()
+		return a != 0
+	}
+	if !opaque("guy.png", 0, 0) || opaque("guy.png", 1, 1) {
+		t.Fatal("guy.png should hold the body but not the sword")
+	}
+	if opaque("guy.sword.png", 0, 0) || !opaque("guy.sword.png", 1, 1) {
+		t.Fatal("guy.sword.png should hold only the sword")
+	}
+
+	var base, over gridSheetJSON
+	rawBase, _ := os.ReadFile("out/guy.json")
+	rawOver, _ := os.ReadFile("out/guy.sword.json")
+	_ = json.Unmarshal(rawBase, &base)
+	_ = json.Unmarshal(rawOver, &over)
+	if !reflect.DeepEqual(base.Overlays, []string{"sword"}) || base.OverlayOf != "" {
+		t.Fatalf("base meta = overlays %v overlayOf %q", base.Overlays, base.OverlayOf)
+	}
+	if over.OverlayOf != "guy" || over.Layer != "sword" || over.Image != "guy.sword.png" {
+		t.Fatalf("overlay meta = %+v", over)
+	}
+	if !reflect.DeepEqual(base.Animations, over.Animations) {
+		t.Fatalf("overlay frames differ from the base's:\n%v\n%v", base.Animations, over.Animations)
+	}
+}
+
+func TestBuildRejectsClashingOverlayKeys(t *testing.T) {
+	_, _, settings := testSprite(t)
+	s, _ := sprite.NewSprite("guy", 2, 2, "")
+	_, _ = sprite.AddFrame(&s, "")
+	_, _ = sprite.AddLayer(&s, "Big Axe")
+	_, _ = sprite.AddLayer(&s, "big-axe")
+	layers := append([]sprite.LayerDef(nil), s.Layers...)
+	layers[0].Overlay, layers[1].Overlay = true, true
+	if _, err := sprite.UpdateSprite(s.ID, sprite.SpritePatch{Layers: &layers}); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, _ := sprite.Find(s.ID)
+	if _, err := Build([]sprite.Sprite{*reloaded}, "out", settings, true); err == nil {
+		t.Fatal("expected an error for two overlays that both build as big_axe")
 	}
 }

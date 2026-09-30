@@ -78,7 +78,8 @@ func outputBase(s sprite.Sprite) (string, error) {
 }
 
 // Build renders each sprite into outDir/<sprite.Out>/ as <slug>.png +
-// <slug>.json (see SheetGrid). full means sprites is every sprite in the
+// <slug>.json, plus <slug>.<key>.png/.json per overlay layer (see
+// RenderSheets). full means sprites is every sprite in the
 // project, which makes it safe to delete previously built files that
 // weren't produced this time; a partial build only adds to the manifest.
 func Build(sprites []sprite.Sprite, outDir string, settings sprite.Settings, full bool) (BuildResult, error) {
@@ -115,14 +116,15 @@ func Build(sprites []sprite.Sprite, outDir string, settings sprite.Settings, ful
 			continue
 		}
 		base, _ := outputBase(s)
-		pngBytes, jsonBytes, err := SheetGrid(s, frames, settings, s.Slug()+".png")
+		sheets, err := RenderSheets(s, frames, settings)
 		if err != nil {
 			return res, fmt.Errorf("sprite %s: %w", s.ID, err)
 		}
 		if err := os.MkdirAll(filepath.Join(outDir, filepath.FromSlash(path.Dir(base))), 0o755); err != nil {
 			return res, err
 		}
-		for name, data := range map[string][]byte{base + ".png": pngBytes, base + ".json": jsonBytes} {
+		for file, data := range sheets {
+			name := path.Join(path.Dir(base), file)
 			changed, err := writeIfChanged(filepath.Join(outDir, filepath.FromSlash(name)), data)
 			if err != nil {
 				return res, err

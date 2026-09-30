@@ -86,6 +86,11 @@ type LayerDef struct {
 	Name    string  `json:"name"`
 	Visible bool    `json:"visible"`
 	Opacity float64 `json:"opacity"`
+	// Overlay layers aren't part of the sprite's own build output; each
+	// builds into its own sheet, <slug>.<OverlayKey(Name)>, that a game
+	// draws on top — e.g. a "sword" layer drawn over a character, shown
+	// when a sword is equipped. See export.Build.
+	Overlay bool `json:"overlay"`
 }
 
 // Summary is the compact shape returned by the sprite list endpoint.
@@ -119,6 +124,27 @@ func (s Sprite) Summary() (Summary, error) {
 // Slug is the filesystem-safe form of s.Name used in its directory name
 // and as the base name of its `pixel build` outputs.
 func (s Sprite) Slug() string { return slugify(s.Name) }
+
+// OverlayKey is the visual key an overlay layer builds under — and what a
+// game matches equipped items against: the layer name lowercased, with each
+// run of anything but a-z, 0-9 and "_" turned into one "_" ("Sword" ->
+// "sword", "Big Axe" -> "big_axe"). "" if nothing usable is left.
+func OverlayKey(layerName string) string {
+	var b strings.Builder
+	pending := false
+	for _, r := range strings.ToLower(layerName) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' {
+			if pending && b.Len() > 0 {
+				b.WriteByte('_')
+			}
+			pending = false
+			b.WriteRune(r)
+		} else {
+			pending = true
+		}
+	}
+	return b.String()
+}
 
 // CleanOutDir validates and normalizes a sprite's Out subfolder: forward
 // slashes, no leading/trailing slash, and never absolute or escaping the
@@ -380,13 +406,30 @@ func parseSections(lines []string, s *Sprite) error {
 	return nil
 }
 
+// layerSettingKeys are the key=value settings after a layer's name on its
+// "## layers" line.
+var layerSettingKeys = map[string]bool{"visible": true, "opacity": true, "overlay": true}
+
+// parseLayerLine reads "<id> <name> visible=… opacity=… [overlay=true]".
+// The name is everything between the id and the first setting, so it may
+// contain spaces ("Big Axe") — it used to be cut at the first space.
 func parseLayerLine(s *Sprite, line string) error {
 	fields := strings.Fields(line)
 	if len(fields) < 2 {
 		return fmt.Errorf("invalid layer line: %q", line)
 	}
-	ld := LayerDef{ID: fields[0], Name: fields[1], Visible: true, Opacity: 1}
-	for _, kv := range fields[2:] {
+	nameEnd := 1
+	for nameEnd < len(fields) {
+		if k, _, ok := strings.Cut(fields[nameEnd], "="); ok && layerSettingKeys[k] {
+			break
+		}
+		nameEnd++
+	}
+	if nameEnd == 1 {
+		return fmt.Errorf("layer %s has no name: %q", fields[0], line)
+	}
+	ld := LayerDef{ID: fields[0], Name: strings.Join(fields[1:nameEnd], " "), Visible: true, Opacity: 1}
+	for _, kv := range fields[nameEnd:] {
 		k, v, ok := strings.Cut(kv, "=")
 		if !ok {
 			continue
@@ -398,6 +441,8 @@ func parseLayerLine(s *Sprite, line string) error {
 			if f, err := strconv.ParseFloat(v, 64); err == nil {
 				ld.Opacity = f
 			}
+		case "overlay":
+			ld.Overlay = v == "true"
 		}
 	}
 	s.Layers = append(s.Layers, ld)
@@ -437,7 +482,11 @@ func (s Sprite) Save() error {
 		fmt.Fprintln(&b)
 		fmt.Fprintln(&b, "## layers")
 		for _, l := range s.Layers {
-			fmt.Fprintf(&b, "%s %s visible=%t opacity=%s\n", l.ID, l.Name, l.Visible, strconv.FormatFloat(l.Opacity, 'f', -1, 64))
+			fmt.Fprintf(&b, "%s %s visible=%t opacity=%s", l.ID, l.Name, l.Visible, strconv.FormatFloat(l.Opacity, 'f', -1, 64))
+			if l.Overlay {
+				b.WriteString(" overlay=true")
+			}
+			b.WriteString("\n")
 		}
 	}
 

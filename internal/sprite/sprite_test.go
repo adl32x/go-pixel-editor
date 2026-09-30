@@ -3,6 +3,7 @@ package sprite
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -278,5 +279,48 @@ func TestCleanOutDir(t *testing.T) {
 func TestSlugKeepsUnderscores(t *testing.T) {
 	if got := (Sprite{Name: "Mossling_30 v2"}).Slug(); got != "mossling_30-v2" {
 		t.Fatalf("slug = %q, want mossling_30-v2", got)
+	}
+}
+
+func TestOverlayKey(t *testing.T) {
+	for in, want := range map[string]string{
+		"sword": "sword", "Sword": "sword", "Big Axe": "big_axe", "big-axe": "big_axe",
+		"staff_2": "staff_2", "  ~!": "", "é-bow": "bow",
+	} {
+		if got := OverlayKey(in); got != want {
+			t.Errorf("OverlayKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestOverlayFlagRoundTrips(t *testing.T) {
+	s, _, _ := setupFourByFour(t)
+	if _, err := AddLayer(&s, "sword"); err != nil {
+		t.Fatal(err)
+	}
+	layers := append([]LayerDef(nil), s.Layers...)
+	layers[0].Overlay = true
+	if _, err := UpdateSprite(s.ID, SpritePatch{Layers: &layers}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Find(s.ID)
+	if !got.Layers[0].Overlay || got.Layers[1].Overlay {
+		t.Fatalf("layers = %+v, want only the first marked overlay", got.Layers)
+	}
+	raw, _ := os.ReadFile(got.Path)
+	if !strings.Contains(string(raw), "sword visible=true opacity=1 overlay=true\n") ||
+		!strings.Contains(string(raw), "base visible=true opacity=1\n") {
+		t.Fatalf("layer lines:\n%s", raw)
+	}
+}
+
+func TestLayerNamesWithSpacesRoundTrip(t *testing.T) {
+	s, _, _ := setupFourByFour(t)
+	if _, err := AddLayer(&s, "Big Axe"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Find(s.ID)
+	if got.Layers[0].Name != "Big Axe" || got.Layers[0].Opacity != 1 || !got.Layers[0].Visible {
+		t.Fatalf("layer = %+v, want name \"Big Axe\" with its settings intact", got.Layers[0])
 	}
 }

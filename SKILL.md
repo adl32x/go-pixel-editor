@@ -77,7 +77,8 @@ frames:
 ```
 
 - `## layers`: one line per layer, stack order (first line = topmost):
-  `<id> <name> visible=<bool> opacity=<float>`.
+  `<id> <name> visible=<bool> opacity=<float>`, plus `overlay=true` for
+  overlay layers. The name may contain spaces.
 - `duration:` is the sprite-wide default hold time per frame, in ms.
 - `## animations`: the rows of the frame grid, as repeated `### <name>`
   blocks. `frames:` is followed by **one frame id per line** (never a single
@@ -170,7 +171,26 @@ subfolder" field in the editor), so each sprite becomes
   the files it wrote itself.
 - Two sprites building to the same path is an error.
 
-The same pair is available per sprite as the `sheet-grid` export format.
+The same files are available per sprite as the `sheet-grid` export format.
+
+### Overlay layers (equipment drawn on a character)
+
+A layer can be marked **overlay** (the "overlay" toggle in the layer panel;
+`overlay=true` on its `## layers` line). Overlay layers stay out of the
+sprite's own sheet and each build into their own, named after the layer:
+a "Sword" layer on `guy` builds as `guy.sword.png` + `guy.sword.json`. The
+key is the layer name lowercased with other characters turned into `_`
+("Big Axe" → `big_axe`) — it's what a game matches an equipped item's
+visual key against, drawing that sheet on top of the character.
+
+- Overlay sheets share the base sheet's layout exactly (same animations,
+  frame rects and durations), so frame n of `guy.sword` sits on frame n of
+  `guy`.
+- `guy.json` lists its overlays (`"overlays": ["sword"]`); each overlay's
+  JSON names its base and key (`"overlayOf": "guy", "layer": "sword"`).
+- An overlay's sheet always includes its layer, even when hidden in the
+  editor, so you can hide the sword while drawing the axe.
+- Two overlays on one sprite with the same key is a build error.
 
 ## Undo / redo (editor)
 

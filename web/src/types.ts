@@ -22,6 +22,9 @@ export interface LayerDef {
   name: string;
   visible: boolean;
   opacity: number;
+  // Builds into its own sheet (<sprite>.<overlayKey(name)>) for the game to
+  // draw on top, e.g. an equipped weapon — see export.RenderSheets.
+  overlay: boolean;
 }
 
 // One cell of an animation row. durationMs overrides the sprite-wide
