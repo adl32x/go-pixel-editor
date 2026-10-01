@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BrushTool } from "./DottingCanvas";
 
 interface ToolbarProps {
@@ -7,7 +8,19 @@ interface ToolbarProps {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  onFlip: (axis: FlipAxis, scope: FlipScope) => void;
 }
+
+export type FlipAxis = "horizontal" | "vertical";
+// What a flip applies to: the active layer of this frame, every layer of
+// this frame, or every frame of the selected animation row.
+export type FlipScope = "layer" | "frame" | "animation";
+
+const FLIP_SCOPES: Array<{ scope: FlipScope; label: string; title: string }> = [
+  { scope: "layer", label: "Layer", title: "Flip the active layer of this frame" },
+  { scope: "frame", label: "Frame", title: "Flip every layer of this frame" },
+  { scope: "animation", label: "Anim", title: "Flip every frame of the selected animation" },
+];
 
 // Shown in tooltips; the shortcuts themselves are handled in App.
 const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+";
@@ -36,7 +49,11 @@ export default function Toolbar({
   canRedo,
   onUndo,
   onRedo,
+  onFlip,
 }: ToolbarProps) {
+  const [flipScope, setFlipScope] = useState<FlipScope>("frame");
+  const scopeTitle = FLIP_SCOPES.find((s) => s.scope === flipScope)!.title.replace("Flip ", "");
+
   return (
     <div className="toolbar">
       <h3>Tools</h3>
@@ -62,6 +79,38 @@ export default function Toolbar({
             onClick={() => onSelectTool(t.tool)}
           >
             {t.label}
+          </button>
+        ))}
+      </div>
+      <h3 className="toolbar-section">Flip</h3>
+      <div className="toolbar-flip">
+        <button
+          type="button"
+          title={`Flip horizontally (left ↔ right): ${scopeTitle}`}
+          onClick={() => onFlip("horizontal", flipScope)}
+        >
+          ↔
+        </button>
+        <button
+          type="button"
+          title={`Flip vertically (top ↕ bottom): ${scopeTitle}`}
+          onClick={() => onFlip("vertical", flipScope)}
+        >
+          ↕
+        </button>
+      </div>
+      <div className="toolbar-flip-scope" role="radiogroup" aria-label="Flip applies to">
+        {FLIP_SCOPES.map((s) => (
+          <button
+            key={s.scope}
+            type="button"
+            role="radio"
+            aria-checked={s.scope === flipScope}
+            title={s.title}
+            className={s.scope === flipScope ? "selected" : ""}
+            onClick={() => setFlipScope(s.scope)}
+          >
+            {s.label}
           </button>
         ))}
       </div>

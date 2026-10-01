@@ -192,6 +192,14 @@ visual key against, drawing that sheet on top of the character.
   editor, so you can hide the sword while drawing the axe.
 - Two overlays on one sprite with the same key is a build error.
 
+## Flip (editor)
+
+**Flip** in the tool panel: ↔ mirrors left↔right, ↕ top↔bottom. The scope
+below the buttons picks what flips — **Layer** (the active layer of the
+current frame), **Frame** (every layer of it, the default) or **Anim**
+(every frame of the selected animation row; e.g. duplicate a walk cycle,
+then flip the copy to face the other way). Each flip is one undo step.
+
 ## Undo / redo (editor)
 
 **Undo**/**Redo** in the tool panel, or ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y). Every

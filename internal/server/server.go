@@ -62,6 +62,7 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("POST /api/sprites/{id}/frames/{frameId}/duplicate", tracked(handleDuplicateFrame))
 
 	mux.HandleFunc("POST /api/sprites/{id}/resize", tracked(handleResizeSprite))
+	mux.HandleFunc("POST /api/sprites/{id}/flip", tracked(handleFlip))
 	mux.HandleFunc("POST /api/sprites/{id}/layers", tracked(handleAddLayer))
 	mux.HandleFunc("DELETE /api/sprites/{id}/layers/{layerId}", tracked(handleDeleteLayer))
 
@@ -344,6 +345,36 @@ func handleResizeSprite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := sprite.ResizeSprite(s, req.Width, req.Height, req.Anchor); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeSprite(w, *s)
+}
+
+type flipRequest struct {
+	// Axis is "horizontal" (left↔right) or "vertical" (top↔bottom).
+	Axis   string   `json:"axis"`
+	Frames []string `json:"frames"`
+	// Layer limits the flip to one layer; "" flips every layer.
+	Layer string `json:"layer"`
+}
+
+// handleFlip mirrors frames in place (see sprite.FlipFrames).
+func handleFlip(w http.ResponseWriter, r *http.Request) {
+	s := findSprite(w, r.PathValue("id"))
+	if s == nil {
+		return
+	}
+	var req flipRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if req.Axis != "horizontal" && req.Axis != "vertical" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("axis must be horizontal or vertical, got %q", req.Axis))
+		return
+	}
+	if err := sprite.FlipFrames(*s, req.Frames, req.Layer, req.Axis == "horizontal"); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}

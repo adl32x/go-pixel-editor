@@ -150,6 +150,17 @@ export function redo(spriteId: string): Promise<HistoryStep> {
   return request(`/sprites/${spriteId}/redo`, { method: "POST" });
 }
 
+// Mirrors frames in place. `layer` limits it to one layer (omit for all).
+export function flipFrames(
+  spriteId: string,
+  input: { axis: "horizontal" | "vertical"; frames: string[]; layer?: string },
+): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/flip`, {
+    method: "POST",
+    body: JSON.stringify({ ...input, layer: input.layer ?? "" }),
+  });
+}
+
 // -- layers ----------------------------------------------------------------
 // Adding/removing a layer retrofits or strips a block on every existing
 // frame (see sprite.AddLayer/DeleteLayer) — unlike rename/reorder/opacity/

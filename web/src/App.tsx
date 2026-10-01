@@ -6,7 +6,7 @@ import DottingCanvas, {
 } from "./canvas/DottingCanvas";
 import LayerPanel from "./layers/LayerPanel";
 import PreviewPanel from "./canvas/PreviewPanel";
-import Toolbar from "./canvas/Toolbar";
+import Toolbar, { type FlipAxis, type FlipScope } from "./canvas/Toolbar";
 import PaletteBar from "./palette/PaletteBar";
 import BuildSettings from "./settings/BuildSettings";
 import PaletteSettings from "./settings/PaletteSettings";
@@ -241,6 +241,32 @@ export default function App() {
     }
   }
 
+  // Mirrors the active layer, the whole frame, or every frame of the
+  // selected animation (server-side, so it's one undo step). A stroke still
+  // waiting to autosave is saved first — it would otherwise land after the
+  // flip and overwrite it. The same frame stays on screen, reloaded.
+  async function handleFlip(axis: FlipAxis, scope: FlipScope) {
+    if (!spriteId || !frameId || !sprite) return;
+    await canvasRef.current?.flush();
+    const row = sprite.animations.find((a) => a.frames.some((f) => f.frameId === frameId));
+    const frames = scope === "animation" && row ? row.frames.map((f) => f.frameId) : [frameId];
+    try {
+      await api.flipFrames(spriteId, {
+        axis,
+        frames,
+        layer: scope === "layer" ? activeLayerId : undefined,
+      });
+    } catch (e) {
+      console.error("flip failed", e);
+      return;
+    }
+    const layers = await api.getFrame(spriteId, frameId);
+    setInitLayers(layers);
+    canvasRef.current?.loadLayers(layers);
+    bumpPreview();
+    setGridReload((n) => n + 1);
+  }
+
   // ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y elsewhere) — except while typing in a field,
   // where the browser's own text undo should win.
   const historyStepRef = useRef(handleHistoryStep);
@@ -399,6 +425,7 @@ export default function App() {
                 canRedo={historyCounts.redo > 0}
                 onUndo={() => handleHistoryStep("undo")}
                 onRedo={() => handleHistoryStep("redo")}
+                onFlip={handleFlip}
               />
 
               {initLayers.length > 0 ? (

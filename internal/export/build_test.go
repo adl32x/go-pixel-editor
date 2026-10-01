@@ -220,7 +220,7 @@ func TestBuildOverlayLayers(t *testing.T) {
 	body := string(settings.Palette[0].Char)
 	blade := string(settings.Palette[1].Char)
 	fr.Layers[reloaded.Layers[1].ID] = [][]rune{[]rune(body + "."), []rune("..")} // body: top-left
-	fr.Layers[sword.ID] = [][]rune{[]rune(".."), []rune("." + blade)}          // sword: bottom-right
+	fr.Layers[sword.ID] = [][]rune{[]rune(".."), []rune("." + blade)}             // sword: bottom-right
 	if err := fr.Save(*reloaded); err != nil {
 		t.Fatal(err)
 	}

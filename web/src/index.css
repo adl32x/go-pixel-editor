@@ -857,3 +857,36 @@ a {
   font-size: 11px;
   color: var(--mac-text-secondary);
 }
+
+.toolbar-section {
+  margin-top: 12px;
+}
+
+.toolbar-flip {
+  display: flex;
+  gap: 4px;
+}
+
+.toolbar-flip button {
+  flex: 1;
+  font-size: 15px;
+  padding: 2px 6px;
+}
+
+.toolbar-flip-scope {
+  display: flex;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.toolbar-flip-scope button {
+  flex: 1;
+  padding: 1px 4px;
+  font-size: 10px;
+}
+
+.toolbar-flip-scope button.selected {
+  background: var(--mac-accent);
+  border-color: var(--mac-accent);
+  color: #fff;
+}
