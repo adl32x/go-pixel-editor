@@ -63,6 +63,7 @@ func newMux() *http.ServeMux {
 
 	mux.HandleFunc("POST /api/sprites/{id}/resize", tracked(handleResizeSprite))
 	mux.HandleFunc("POST /api/sprites/{id}/flip", tracked(handleFlip))
+	mux.HandleFunc("POST /api/sprites/{id}/rotate", tracked(handleRotate))
 	mux.HandleFunc("POST /api/sprites/{id}/layers", tracked(handleAddLayer))
 	mux.HandleFunc("DELETE /api/sprites/{id}/layers/{layerId}", tracked(handleDeleteLayer))
 
@@ -375,6 +376,36 @@ func handleFlip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := sprite.FlipFrames(*s, req.Frames, req.Layer, req.Axis == "horizontal"); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeSprite(w, *s)
+}
+
+type rotateRequest struct {
+	// Direction is "cw" (clockwise) or "ccw".
+	Direction string   `json:"direction"`
+	Frames    []string `json:"frames"`
+	Layer     string   `json:"layer"`
+}
+
+// handleRotate turns frames by 90° (see sprite.RotateFrames); a rotation
+// that would crop drawn pixels on a non-square canvas is refused.
+func handleRotate(w http.ResponseWriter, r *http.Request) {
+	s := findSprite(w, r.PathValue("id"))
+	if s == nil {
+		return
+	}
+	var req rotateRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if req.Direction != "cw" && req.Direction != "ccw" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("direction must be cw or ccw, got %q", req.Direction))
+		return
+	}
+	if err := sprite.RotateFrames(*s, req.Frames, req.Layer, req.Direction == "cw"); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}

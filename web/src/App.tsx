@@ -6,7 +6,7 @@ import DottingCanvas, {
 } from "./canvas/DottingCanvas";
 import LayerPanel from "./layers/LayerPanel";
 import PreviewPanel from "./canvas/PreviewPanel";
-import Toolbar, { type FlipAxis, type FlipScope } from "./canvas/Toolbar";
+import Toolbar, { type FlipScope, type Transform } from "./canvas/Toolbar";
 import PaletteBar from "./palette/PaletteBar";
 import BuildSettings from "./settings/BuildSettings";
 import PaletteSettings from "./settings/PaletteSettings";
@@ -241,23 +241,36 @@ export default function App() {
     }
   }
 
-  // Mirrors the active layer, the whole frame, or every frame of the
-  // selected animation (server-side, so it's one undo step). A stroke still
-  // waiting to autosave is saved first — it would otherwise land after the
-  // flip and overwrite it. The same frame stays on screen, reloaded.
-  async function handleFlip(axis: FlipAxis, scope: FlipScope) {
+  // Flips or rotates the active layer, the whole frame, or every frame of
+  // the selected animation (server-side, so it's one undo step). A stroke
+  // still waiting to autosave is saved first — it would otherwise land after
+  // the transform and overwrite it. The same frame stays on screen, reloaded.
+  // A refused rotation (it would crop a non-square canvas) is shown in the
+  // toolbar rather than failing silently.
+  const [transformError, setTransformError] = useState<string | null>(null);
+  async function handleTransform(transform: Transform, scope: FlipScope) {
     if (!spriteId || !frameId || !sprite) return;
     await canvasRef.current?.flush();
     const row = sprite.animations.find((a) => a.frames.some((f) => f.frameId === frameId));
     const frames = scope === "animation" && row ? row.frames.map((f) => f.frameId) : [frameId];
+    const layer = scope === "layer" ? activeLayerId : undefined;
     try {
-      await api.flipFrames(spriteId, {
-        axis,
-        frames,
-        layer: scope === "layer" ? activeLayerId : undefined,
-      });
+      if (transform === "rotate-cw" || transform === "rotate-ccw") {
+        await api.rotateFrames(spriteId, {
+          direction: transform === "rotate-cw" ? "cw" : "ccw",
+          frames,
+          layer,
+        });
+      } else {
+        await api.flipFrames(spriteId, {
+          axis: transform === "flip-horizontal" ? "horizontal" : "vertical",
+          frames,
+          layer,
+        });
+      }
+      setTransformError(null);
     } catch (e) {
-      console.error("flip failed", e);
+      setTransformError(e instanceof Error ? e.message : String(e));
       return;
     }
     const layers = await api.getFrame(spriteId, frameId);
@@ -425,7 +438,8 @@ export default function App() {
                 canRedo={historyCounts.redo > 0}
                 onUndo={() => handleHistoryStep("undo")}
                 onRedo={() => handleHistoryStep("redo")}
-                onFlip={handleFlip}
+                onTransform={handleTransform}
+                transformError={transformError}
               />
 
               {initLayers.length > 0 ? (

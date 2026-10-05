@@ -867,8 +867,12 @@ a {
   gap: 4px;
 }
 
+.toolbar-flip {
+  flex-wrap: wrap;
+}
+
 .toolbar-flip button {
-  flex: 1;
+  flex: 1 0 40%;
   font-size: 15px;
   padding: 2px 6px;
 }
@@ -889,4 +893,11 @@ a {
   background: var(--mac-accent);
   border-color: var(--mac-accent);
   color: #fff;
+}
+
+.toolbar-error {
+  margin: 6px 0 0;
+  max-width: 120px;
+  font-size: 10px;
+  color: #d70015;
 }

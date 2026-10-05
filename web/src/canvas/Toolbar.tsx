@@ -8,11 +8,13 @@ interface ToolbarProps {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
-  onFlip: (axis: FlipAxis, scope: FlipScope) => void;
+  onTransform: (transform: Transform, scope: FlipScope) => void;
+  // Why the last flip/rotate was refused, if it was.
+  transformError: string | null;
 }
 
-export type FlipAxis = "horizontal" | "vertical";
-// What a flip applies to: the active layer of this frame, every layer of
+export type Transform = "flip-horizontal" | "flip-vertical" | "rotate-cw" | "rotate-ccw";
+// What a flip or rotation applies to: the active layer of this frame, every layer of
 // this frame, or every frame of the selected animation row.
 export type FlipScope = "layer" | "frame" | "animation";
 
@@ -49,7 +51,8 @@ export default function Toolbar({
   canRedo,
   onUndo,
   onRedo,
-  onFlip,
+  onTransform,
+  transformError,
 }: ToolbarProps) {
   const [flipScope, setFlipScope] = useState<FlipScope>("frame");
   const scopeTitle = FLIP_SCOPES.find((s) => s.scope === flipScope)!.title.replace("Flip ", "");
@@ -82,21 +85,35 @@ export default function Toolbar({
           </button>
         ))}
       </div>
-      <h3 className="toolbar-section">Flip</h3>
+      <h3 className="toolbar-section">Transform</h3>
       <div className="toolbar-flip">
         <button
           type="button"
           title={`Flip horizontally (left ↔ right): ${scopeTitle}`}
-          onClick={() => onFlip("horizontal", flipScope)}
+          onClick={() => onTransform("flip-horizontal", flipScope)}
         >
           ↔
         </button>
         <button
           type="button"
           title={`Flip vertically (top ↕ bottom): ${scopeTitle}`}
-          onClick={() => onFlip("vertical", flipScope)}
+          onClick={() => onTransform("flip-vertical", flipScope)}
         >
           ↕
+        </button>
+        <button
+          type="button"
+          title={`Rotate 90° counter-clockwise: ${scopeTitle}`}
+          onClick={() => onTransform("rotate-ccw", flipScope)}
+        >
+          ⟲
+        </button>
+        <button
+          type="button"
+          title={`Rotate 90° clockwise: ${scopeTitle}`}
+          onClick={() => onTransform("rotate-cw", flipScope)}
+        >
+          ⟳
         </button>
       </div>
       <div className="toolbar-flip-scope" role="radiogroup" aria-label="Flip applies to">
@@ -114,6 +131,7 @@ export default function Toolbar({
           </button>
         ))}
       </div>
+      {transformError && <p className="toolbar-error">{transformError}</p>}
     </div>
   );
 }

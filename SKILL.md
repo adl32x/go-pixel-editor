@@ -192,13 +192,19 @@ visual key against, drawing that sheet on top of the character.
   editor, so you can hide the sword while drawing the axe.
 - Two overlays on one sprite with the same key is a build error.
 
-## Flip (editor)
+## Flip and rotate (editor)
 
-**Flip** in the tool panel: ↔ mirrors left↔right, ↕ top↔bottom. The scope
-below the buttons picks what flips — **Layer** (the active layer of the
-current frame), **Frame** (every layer of it, the default) or **Anim**
-(every frame of the selected animation row; e.g. duplicate a walk cycle,
-then flip the copy to face the other way). Each flip is one undo step.
+**Transform** in the tool panel: ↔ mirrors left↔right, ↕ top↔bottom, ⟲/⟳
+turn 90° counter-clockwise/clockwise. The scope below the buttons picks
+what changes — **Layer** (the active layer of the current frame), **Frame**
+(every layer of it, the default) or **Anim** (every frame of the selected
+animation row; e.g. duplicate a walk cycle, then flip the copy to face the
+other way). Each is one undo step.
+
+Rotation is exact on a square canvas. On a non-square one (e.g. 8x16) the
+content turns around the canvas center; if any drawn pixel would end up
+outside the canvas, the rotation is refused with a message instead of
+cropping — resize to a square first for those.
 
 ## Undo / redo (editor)
 

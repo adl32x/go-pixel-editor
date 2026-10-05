@@ -161,6 +161,18 @@ export function flipFrames(
   });
 }
 
+// Turns frames by 90°. Refused (with a message) if it would cut drawn
+// pixels off a non-square canvas.
+export function rotateFrames(
+  spriteId: string,
+  input: { direction: "cw" | "ccw"; frames: string[]; layer?: string },
+): Promise<Sprite> {
+  return request(`/sprites/${spriteId}/rotate`, {
+    method: "POST",
+    body: JSON.stringify({ ...input, layer: input.layer ?? "" }),
+  });
+}
+
 // -- layers ----------------------------------------------------------------
 // Adding/removing a layer retrofits or strips a block on every existing
 // frame (see sprite.AddLayer/DeleteLayer) — unlike rename/reorder/opacity/
